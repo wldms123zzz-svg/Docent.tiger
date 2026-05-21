@@ -94,11 +94,11 @@ export class TrackingController extends EventTarget {
     if (target === STATES.NAVIGATION) {
       if (!this.worldTracker) throw new Error('worldTracker not registered');
       await this.worldTracker.start();
-      this._applyAnimation('Armature|walking_man|baselayer');
+      // this._applyAnimation('Armature|walking_man|baselayer');
     } else if (target === STATES.EXPLANATION) {
       if (!this.markerTracker) throw new Error('markerTracker not registered');
       await this.markerTracker.start();
-      this._applyAnimation('Armature|Call_Gesture|baselayer');
+      // this._applyAnimation('Armature|Call_Gesture|baselayer');
     }
 
     await this._fadeCharacter(1, 350);
