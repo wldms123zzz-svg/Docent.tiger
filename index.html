@@ -1,0 +1,2153 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>청자 호랑이 도슨트 · Hybrid WebAR</title>
+
+<!-- ───────── 폰트: 본명조(편집체) + 본고딕(본문) ───────── -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700;900&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+<!-- ───────── Three.js + A-Frame ───────── -->
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.5.4/dist/aframe-extras.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
+<!-- ───────── 마커 트래킹: AR.js + MindAR (둘 다 비교용) ───────── -->
+<script src="https://raw.githack.com/AR-js-org/AR.js/3.4.5/aframe/build/aframe-ar-nft.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+<style>
+  :root {
+    --ink:        #0a0d12;
+    --ink-2:      #141821;
+    --celadon:    #4a8576;
+    --celadon-dk: #1f4a3f;
+    --celadon-lt: #88c4b1;
+    --gold:       #c8a55b;
+    --paper:      #ebe5d6;
+    --line:       rgba(200,165,91,0.25);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--ink); color: var(--paper); }
+  body { font-family: "Noto Sans KR", system-ui, sans-serif; font-weight: 300; }
+
+  /* AR 모드 진입 시 A-Frame 강제 전체화면 및 캔버스 배경 투명화 */
+  html, body, #ar-stage, a-scene, canvas, .a-canvas, html.a-fullscreen, body.a-fullscreen {
+    background-color: transparent !important;
+    background: transparent !important;
+  }
+
+  /* ──────────── 부팅 화면 ──────────── */
+  #boot {
+    position: fixed; inset: 0; z-index: 100;
+    background: radial-gradient(ellipse at center top, #1a2530 0%, #0a0d12 70%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 32px; text-align: center;
+    transition: opacity 0.5s ease;
+  }
+  #boot.hidden { opacity: 0; pointer-events: none; }
+  .seal {
+    width: 88px; height: 88px; border: 1.5px solid var(--gold);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-family: "Noto Serif KR", serif; font-weight: 900; font-size: 38px;
+    color: var(--gold); margin-bottom: 28px;
+    box-shadow: 0 0 60px rgba(200,165,91,0.15), inset 0 0 30px rgba(200,165,91,0.08);
+    position: relative;
+  }
+  .seal::before, .seal::after {
+    content: ''; position: absolute; inset: -8px; border-radius: 50%;
+    border: 1px solid rgba(200,165,91,0.18); animation: pulse 3s ease-in-out infinite;
+  }
+  .seal::after { animation-delay: 1.5s; inset: -16px; }
+  @keyframes pulse { 0%,100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 0.8; transform: scale(1.04); } }
+
+  h1.title {
+    font-family: "Noto Serif KR", serif; font-weight: 700;
+    font-size: clamp(22px, 6vw, 32px); letter-spacing: 0.05em;
+    color: var(--paper); margin-bottom: 8px;
+  }
+  .subtitle {
+    font-size: 12px; letter-spacing: 0.3em; color: var(--celadon-lt);
+    text-transform: uppercase; margin-bottom: 40px;
+  }
+
+  /* ──────────── 부팅 액션 ──────────── */
+  .mode-select { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 320px; }
+  .mode-btn {
+    padding: 16px 20px; background: rgba(255,255,255,0.04);
+    border: 1px solid var(--line); color: var(--paper);
+    font-family: "Noto Sans KR", sans-serif; font-size: 14px; letter-spacing: 0.05em;
+    cursor: pointer; transition: all 0.25s;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .mode-btn:hover, .mode-btn:active {
+    background: rgba(200,165,91,0.08); border-color: var(--gold);
+  }
+  .mode-btn small { font-size: 10px; opacity: 0.5; letter-spacing: 0.15em; }
+
+  .boot-foot {
+    position: absolute; bottom: 24px; left: 0; right: 0; text-align: center;
+    font-size: 10px; letter-spacing: 0.2em; color: rgba(235,229,214,0.3);
+  }
+
+  /* ──────────── AR 씬 ──────────── */
+  #ar-stage { position: fixed; inset: 0; width: 100%; height: 100%; }
+  a-scene { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; }
+  a-scene canvas { background: transparent !important; background-color: transparent !important; }
+
+  /* ──────────── HUD ──────────── */
+  #hud {
+    position: fixed; inset: 0; z-index: 50; pointer-events: none;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: env(safe-area-inset-top, 16px) 16px env(safe-area-inset-bottom, 16px);
+  }
+  #hud.hidden { display: none; }
+
+  .hud-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .state-pill {
+    pointer-events: auto;
+    padding: 8px 14px; background: rgba(10,13,18,0.75); backdrop-filter: blur(12px);
+    border: 1px solid var(--line); border-radius: 100px;
+    font-size: 11px; letter-spacing: 0.2em; color: var(--celadon-lt);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .state-pill .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--celadon-lt);
+    box-shadow: 0 0 8px var(--celadon-lt); animation: blink 1.4s ease-in-out infinite;
+  }
+  .state-pill[data-state="EXPLANATION"] .dot { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+  .state-pill[data-state="EXPLANATION"] { color: var(--gold); border-color: rgba(200,165,91,0.5); }
+  @keyframes blink { 0%,100% { opacity: 1 } 50% { opacity: 0.35 } }
+
+  .mode-tag {
+    pointer-events: auto;
+    padding: 8px 12px; background: rgba(10,13,18,0.75); backdrop-filter: blur(12px);
+    border: 1px solid var(--line); border-radius: 4px;
+    font-size: 10px; letter-spacing: 0.2em; color: var(--paper);
+  }
+
+  /* ──────────── API 키 설정 모달 ──────────── */
+  .api-settings-btn {
+    pointer-events: auto;
+    cursor: pointer;
+    background: rgba(10,13,18,0.75); backdrop-filter: blur(12px);
+    border: 1px solid var(--line); border-radius: 50%;
+    width: 34px; height: 34px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--paper); font-size: 16px;
+    transition: all 0.3s;
+  }
+  .api-settings-btn:hover {
+    border-color: var(--gold);
+    color: var(--gold);
+    transform: rotate(45deg);
+  }
+  
+  .api-modal {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .api-modal.visible {
+    opacity: 1; pointer-events: auto;
+  }
+  .api-modal-card {
+    background: linear-gradient(135deg, rgba(24,28,37,0.95), rgba(14,18,25,0.98));
+    border: 1px solid var(--gold);
+    border-radius: 12px;
+    padding: 24px; width: 90%; max-width: 380px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    font-family: "Inter", sans-serif;
+  }
+  .api-modal-title {
+    font-size: 16px; font-weight: bold; color: var(--gold);
+    margin-bottom: 12px; letter-spacing: 0.05em;
+  }
+  .api-modal-desc {
+    font-size: 12px; color: var(--paper); opacity: 0.8;
+    margin-bottom: 20px; line-height: 1.6;
+  }
+  .api-input-wrap {
+    position: relative; margin-bottom: 20px;
+  }
+  .api-input {
+    width: 100%; padding: 10px 12px; background: rgba(0,0,0,0.4);
+    border: 1px solid var(--line); border-radius: 6px;
+    color: var(--paper); font-size: 13px; outline: none;
+    box-sizing: border-box;
+  }
+  .api-input:focus {
+    border-color: var(--gold);
+  }
+  .api-modal-btns {
+    display: flex; gap: 10px; justify-content: flex-end;
+  }
+  .api-btn {
+    padding: 8px 16px; font-size: 12px; font-weight: bold; border-radius: 4px;
+    cursor: pointer; border: 1px solid transparent;
+  }
+  .api-btn-save {
+    background: var(--gold); color: #000; border-color: var(--gold);
+  }
+  .api-btn-close {
+    background: transparent; color: var(--paper); border-color: var(--line);
+  }
+
+  /* ──────────── 캐릭터 가이드라인 (NAVIGATION) ──────────── */
+  .guide-bar {
+    pointer-events: none; align-self: center;
+    margin-bottom: 100px;
+    padding: 12px 24px; background: rgba(31,74,63,0.75); backdrop-filter: blur(12px);
+    border: 1px solid rgba(136,196,177,0.4);
+    font-family: "Noto Serif KR", serif; font-size: 14px; letter-spacing: 0.1em;
+    color: var(--paper); text-align: center;
+    transform: translateY(0); transition: all 0.4s;
+  }
+  .guide-bar.hidden { transform: translateY(20px); opacity: 0; }
+
+  /* ──────────── 설명 카드 (EXPLANATION) ──────────── */
+  .explain-card {
+    pointer-events: auto;
+    background: linear-gradient(180deg, rgba(20,24,33,0.96), rgba(10,13,18,0.98));
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--line);
+    padding: 20px 20px 24px;
+    transform: translateY(110%); transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    max-height: 50vh; overflow-y: auto;
+  }
+  .explain-card.visible { transform: translateY(0); }
+  .explain-card .label {
+    font-size: 10px; letter-spacing: 0.3em; color: var(--gold); margin-bottom: 8px;
+  }
+  .explain-card h2 {
+    font-family: "Noto Serif KR", serif; font-weight: 700;
+    font-size: 22px; margin-bottom: 12px;
+    color: var(--paper); letter-spacing: 0.04em;
+  }
+  .explain-card p {
+    font-size: 13px; line-height: 1.7; color: rgba(235,229,214,0.78); margin-bottom: 14px;
+  }
+  .audio-ctrl {
+    display: flex; align-items: center; gap: 12px; padding-top: 12px;
+    border-top: 1px solid rgba(200,165,91,0.15);
+  }
+  .audio-ctrl button {
+    width: 38px; height: 38px; border-radius: 50%;
+    border: 1px solid var(--gold); background: rgba(200,165,91,0.08);
+    color: var(--gold); font-size: 14px; cursor: pointer;
+  }
+  .audio-ctrl .audio-label { font-size: 11px; letter-spacing: 0.15em; color: rgba(200,165,91,0.7); }
+
+  /* ──────────── 오류 ──────────── */
+  #err {
+    position: fixed; bottom: 20px; left: 20px; right: 20px; z-index: 200;
+    padding: 14px 18px; background: #2a1a1a; border-left: 3px solid #d96;
+    font-size: 12px; line-height: 1.6; display: none;
+  }
+  #err.show { display: block; }
+
+  /* 디버그 오버레이 */
+  #dbg {
+    position: fixed; bottom: 4px; left: 4px; z-index: 999;
+    font-family: monospace; font-size: 9px; color: rgba(255,255,255,0.4);
+    pointer-events: none;
+  }
+
+  /* ──────────── 카메라 조준 및 시뮬레이션 감지 ──────────── */
+  .reticle {
+    position: fixed;
+    top: 45%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 220px; height: 220px;
+    border: 2px dashed rgba(200, 165, 91, 0.65);
+    border-radius: 24px;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 20px;
+    pointer-events: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 0 9999px rgba(10, 13, 18, 0.35); /* 주변 어둡게 포커스 */
+  }
+  .reticle.hidden { display: none; }
+  .reticle-label {
+    font-size: 11px;
+    color: var(--gold);
+    background: rgba(10,13,18,0.9);
+    border: 1px solid var(--line);
+    padding: 6px 12px;
+    border-radius: 12px;
+    margin-bottom: 14px;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+  .scan-trigger-btn {
+    pointer-events: auto;
+    background: linear-gradient(135deg, var(--gold) 0%, #a8833b 100%);
+    color: var(--ink);
+    border: none;
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 700;
+    border-radius: 18px;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4), 0 0 10px rgba(200,165,91,0.3);
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    font-family: "Noto Sans KR", sans-serif;
+  }
+  .scan-trigger-btn:active {
+    transform: scale(0.95);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+  }
+
+  /* ──────────── 퀴즈 및 가마 게임 UI ──────────── */
+  .quiz-overlay {
+    position: fixed; inset: 0; z-index: 150;
+    background: rgba(10, 13, 18, 0.88);
+    backdrop-filter: blur(12px);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    padding: 24px;
+  }
+  .quiz-overlay.visible {
+    opacity: 1; pointer-events: auto;
+  }
+  .quiz-card {
+    background: linear-gradient(135deg, rgba(24, 30, 40, 0.95), rgba(12, 16, 23, 0.98));
+    border: 1.5px solid var(--gold);
+    border-radius: 16px;
+    width: 100%; max-width: 380px;
+    padding: 28px 24px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.6), 0 0 30px rgba(200,165,91,0.15);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  /* 전통 무양 모서리 데코 */
+  .quiz-card::before {
+    content: ''; position: absolute; top: 8px; left: 8px; right: 8px; bottom: 8px;
+    border: 1px dashed rgba(200, 165, 91, 0.25);
+    border-radius: 12px; pointer-events: none;
+  }
+  .kiln-temp-wrap {
+    margin-bottom: 24px;
+    position: relative;
+    z-index: 2;
+  }
+  .kiln-temp-label {
+    font-family: "Noto Serif KR", serif; font-size: 11px; color: var(--gold);
+    letter-spacing: 0.1em; display: flex; justify-content: space-between; margin-bottom: 8px;
+  }
+  .kiln-temp-bar {
+    width: 100%; height: 8px; background: rgba(255,255,255,0.06);
+    border-radius: 4px; overflow: hidden; border: 1px solid rgba(200, 165, 91, 0.2);
+  }
+  .kiln-temp-fill {
+    height: 100%; width: 0%; background: linear-gradient(90deg, #d9534f 0%, #f0ad4e 60%, var(--celadon-lt) 100%);
+    transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 0 8px rgba(240, 173, 78, 0.5);
+  }
+  .quiz-question-num {
+    font-family: "Noto Serif KR", serif; font-size: 11px; color: var(--celadon-lt);
+    letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 8px;
+    font-weight: 700;
+  }
+  .quiz-question {
+    font-family: "Noto Serif KR", serif; font-weight: 700; font-size: 18px;
+    line-height: 1.5; color: var(--paper); margin-bottom: 24px;
+    word-break: keep-all;
+    position: relative;
+    z-index: 2;
+  }
+  .quiz-options {
+    display: flex; flex-direction: column; gap: 10px;
+    position: relative;
+    z-index: 2;
+  }
+  .quiz-opt-btn {
+    padding: 14px 18px; background: rgba(255,255,255,0.03);
+    border: 1px solid var(--line); border-radius: 8px;
+    color: var(--paper); font-size: 13.5px; text-align: left;
+    cursor: pointer; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex; align-items: center;
+    font-family: "Noto Sans KR", sans-serif;
+  }
+  .quiz-opt-btn:hover {
+    background: rgba(200,165,91,0.08); border-color: var(--gold);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(200,165,91,0.15);
+  }
+  .quiz-opt-btn:active {
+    transform: translateY(0);
+  }
+  .quiz-opt-num {
+    font-family: "Noto Serif KR", serif; color: var(--gold);
+    font-weight: 900; margin-right: 12px;
+    font-size: 14px;
+  }
+
+  /* 결과 카드 */
+  .result-card {
+    background: linear-gradient(135deg, rgba(24, 30, 40, 0.96), rgba(12, 16, 23, 0.99));
+    border: 2px solid var(--gold); border-radius: 16px;
+    width: 100%; max-width: 380px; padding: 36px 24px;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.7), 0 0 35px rgba(200,165,91,0.2);
+    text-align: center; position: relative;
+  }
+  .result-card::before {
+    content: ''; position: absolute; top: 8px; left: 8px; right: 8px; bottom: 8px;
+    border: 1px dashed rgba(200, 165, 91, 0.3);
+    border-radius: 12px; pointer-events: none;
+  }
+  .result-icon {
+    font-size: 64px; margin-bottom: 24px;
+    display: inline-block;
+    animation: floatAnim 3s ease-in-out infinite;
+  }
+  @keyframes floatAnim {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  .result-title {
+    font-family: "Noto Serif KR", serif; font-size: 24px; font-weight: 700;
+    color: var(--gold); margin-bottom: 16px; letter-spacing: 0.05em;
+  }
+  .result-desc {
+    font-size: 13.5px; line-height: 1.7; color: rgba(235,229,214,0.85);
+    margin-bottom: 28px; word-break: keep-all;
+    padding: 0 10px;
+  }
+  .result-btn {
+    width: 100%; padding: 15px; background: linear-gradient(135deg, var(--gold) 0%, #a8833b 100%);
+    color: var(--ink); border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 6px 20px rgba(200,165,91,0.3);
+    transition: all 0.2s;
+    font-family: "Noto Sans KR", sans-serif;
+  }
+  .result-btn:active {
+    transform: scale(0.98);
+  }
+  .result-btn-retry {
+    background: transparent; border: 1px solid var(--line); color: var(--paper);
+    margin-top: 10px; box-shadow: none;
+  }
+  .result-btn-retry:hover {
+    border-color: var(--gold); color: var(--gold);
+    background: rgba(200,165,91,0.05);
+  }
+
+  /* Confetti canvas */
+  #confetti-canvas {
+    position: fixed; inset: 0; z-index: 140;
+    pointer-events: none; width: 100%; height: 100%;
+  }
+
+  /* ──────────── 마이크 버튼 (양방향 대화) ──────────── */
+  #mic-btn {
+    pointer-events: auto;
+    position: fixed; bottom: 32px; right: 24px; z-index: 60;
+    width: 60px; height: 60px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--celadon) 0%, var(--celadon-dk) 100%);
+    border: 2px solid var(--celadon-lt);
+    color: #fff; font-size: 24px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 6px 24px rgba(74,133,118,0.4), 0 0 12px rgba(136,196,177,0.2);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  #mic-btn:active { transform: scale(0.9); }
+  #mic-btn.listening {
+    background: linear-gradient(135deg, #d9534f 0%, #a83232 100%);
+    border-color: #ff6b6b;
+    box-shadow: 0 0 20px rgba(217,83,79,0.6);
+    animation: micPulse 1s ease-in-out infinite;
+  }
+  @keyframes micPulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(217,83,79,0.4); }
+    50% { box-shadow: 0 0 30px rgba(217,83,79,0.8); }
+  }
+  #mic-btn.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════
+     부팅 화면 — Trigger Button (Autoplay Policy 우회)
+     ════════════════════════════════════════════════ -->
+<div id="boot">
+  <div class="seal">虎</div>
+  <h1 class="title">청자 호랑이 도슨트</h1>
+  <div class="subtitle">Virtual AR Docent</div>
+
+  <p style="font-size: 14px; line-height: 1.8; color: var(--paper); opacity: 0.85; max-width: 300px; margin: 0 auto 32px; word-break: keep-all;">
+    안녕하세요! 저는 오늘의 도슨트 호랑이예요.<br>
+    카메라를 켜주시면 제가 나타나 설명해 드릴게요.
+  </p>
+
+  <div class="mode-select">
+    <button class="mode-btn" id="start-btn" data-mode="nav-only" style="justify-content: center; font-weight: bold; border-color: var(--gold); background: rgba(200,165,91,0.12);">
+      <span>가상 도슨트 시작하기</span>
+    </button>
+  </div>
+
+  <div class="boot-foot">국립중앙박물관 IP · 공모전 MVP · v0.2</div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     AR 스테이지
+     ════════════════════════════════════════════════ -->
+<div id="ar-stage"></div>
+
+<!-- ════════════════════════════════════════════════
+     HUD
+     ════════════════════════════════════════════════ -->
+<div id="hud" class="hidden">
+  <div class="hud-top">
+    <div class="state-pill" id="state-pill" data-state="NAVIGATION">
+      <span class="dot"></span><span id="state-label">NAVIGATION</span>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <div class="mode-tag" id="mode-tag">—</div>
+      <button class="api-settings-btn" id="open-api-btn" title="AI 설정">⚙️</button>
+    </div>
+  </div>
+
+  <!-- 카메라 조준 및 테스트용 트리거 영역 -->
+  <div id="reticle" class="reticle hidden">
+    <div class="reticle-label">전시 작품을 사각형 안에 비춰주세요</div>
+    <button id="scan-trigger-btn" class="scan-trigger-btn">작품 비추기 (테스트용)</button>
+  </div>
+</div>
+
+<!-- 🎙️ 마이크 버튼 (양방향 음성 대화) -->
+<button id="mic-btn" class="hidden" title="호선생에게 질문하기">🎙️</button>
+
+<!-- Gemini API 키 설정 모달 -->
+<div class="api-modal" id="api-modal">
+  <div class="api-modal-card">
+    <div class="api-modal-title">⚙️ 호선생 AI 실시간 감지 설정</div>
+    <div class="api-modal-desc">
+      카메라 화면에 비친 실제 작품을 AI 비전이 직접 분석하여 구수한 호선생 도슨트 말투로 맞춤형 대사를 실시간 생성합니다.<br><br>
+      * API 키를 입력하지 않으시면 스마트 시뮬레이션 데모 해설로 작동합니다.
+    </div>
+    <div class="api-input-wrap">
+      <input type="password" class="api-input" id="api-key-input" placeholder="Gemini API Key 입력">
+    </div>
+    <div class="api-modal-btns">
+      <button class="api-btn api-btn-close" id="close-api-btn">닫기</button>
+      <button class="api-btn api-btn-save" id="save-api-btn">저장하기</button>
+    </div>
+  </div>
+</div>
+
+<div id="err"></div>
+<div id="dbg"></div>
+
+<!-- ════════════════════════════════════════════════
+     퀴즈 및 게임 오버레이
+     ════════════════════════════════════════════════ -->
+<div class="quiz-overlay" id="quiz-overlay">
+  <div class="quiz-card">
+    <div class="kiln-temp-wrap">
+      <div class="kiln-temp-label">
+        <span>🔥 가마 온도</span>
+        <span id="kiln-temp-val">1000°C</span>
+      </div>
+      <div class="kiln-temp-bar">
+        <div class="kiln-temp-fill" id="kiln-temp-fill"></div>
+      </div>
+    </div>
+    <div class="quiz-question-num" id="quiz-question-num">문제 1 / 3</div>
+    <div class="quiz-question" id="quiz-question">질문 로딩 중...</div>
+    <div class="quiz-options" id="quiz-options">
+      <!-- 동적 주입 -->
+    </div>
+  </div>
+</div>
+
+<div class="quiz-overlay" id="result-overlay">
+  <div class="result-card">
+    <div class="result-icon" id="result-icon">🍶</div>
+    <div class="result-title" id="result-title">명품 청자 탄생!</div>
+    <div class="result-desc" id="result-desc">
+      축하합니다! 퀴즈를 모두 맞혀 가마 온도가 1300°C에 도달했습니다. 영롱한 비색을 띤 청자 투각칠보문향로가 성공적으로 구워졌습니다!
+    </div>
+    <button class="result-btn" id="result-action-btn">완성품 감상하기</button>
+    <button class="result-btn result-btn-retry" id="result-retry-btn">해설 다시 듣고 재도전</button>
+  </div>
+</div>
+
+<!-- 🎨 미션 오버레이 모달 -->
+<div class="quiz-overlay" id="mission-overlay">
+  <div class="result-card">
+    <div class="result-icon" id="mission-icon">🎨</div>
+    <div class="result-title" id="mission-title">미션 카드</div>
+    <div class="result-desc" id="mission-desc">박물관을 관람하며 미션을 완료해보렴!</div>
+    <button class="result-btn" id="mission-accept-btn">미션 수락!</button>
+  </div>
+</div>
+
+<canvas id="confetti-canvas"></canvas>
+
+<!-- ════════════════════════════════════════════════
+     메인 로직
+     ════════════════════════════════════════════════ -->
+<script type="module">
+import { TrackingController, WorldTrackerFallback, STATES }
+  from './tracking-controller.js';
+import { applyCeladonMaterial, setupMuseumLighting, createMuseumEnvMap }
+  from './celadon-shader.js';
+import { FlowController, FLOW_STATES } from './flow-controller.js';
+import { warmupTTS, stopSpeaking as ttsStop } from './tts.js';
+import { startListening, stopListening, isSTTSupported } from './stt.js';
+
+const THREE = AFRAME.THREE;
+window.THREE = THREE;            // celadon-shader 내부 참조용
+let flowCtrl = null; // 전역 FlowController 인스턴스
+
+// ─── 마이크 버튼: 양방향 음성 대화 ───
+const micBtn = document.getElementById('mic-btn');
+let isListening = false;
+
+if (micBtn) {
+  micBtn.addEventListener('click', async (e) => {
+    e.stopPropagation(); // 탭 이벤트가 next()로 전파되지 않도록
+    
+    if (!isSTTSupported()) {
+      alert("현재 브라우저는 음성 인식을 지원하지 않습니다. Chrome 혹은 Safari를 이용해 주시고, 보안 접속(HTTPS) 상태인지 확인해 주세요!");
+      return;
+    }
+
+    if (isListening) {
+      stopListening();
+      return;
+    }
+    if (!flowCtrl) return;
+
+    // TTS 중단 후 마이크 ON
+    ttsStop();
+    isListening = true;
+    micBtn.classList.add('listening');
+    micBtn.textContent = '⏹️';
+
+    const speechBubble = document.querySelector('#speech-bubble');
+
+    const userText = await startListening({
+      onStart: () => {
+        console.log('[MIC] Listening...');
+        if (speechBubble) {
+          updateSpeechBubble(speechBubble, "🎙️ 귀를 기울이고 있단다... 편하게 물어보려무나!");
+        }
+      },
+      onEnd: () => {
+        isListening = false;
+        micBtn.classList.remove('listening');
+        micBtn.textContent = '🎙️';
+      },
+    });
+
+    if (userText && userText.trim()) {
+      console.log('[MIC] User said:', userText);
+      await flowCtrl.chat(userText);
+    } else {
+      if (speechBubble) {
+        updateSpeechBubble(speechBubble, "어허, 소리가 잘 들리지 않는구나. 마이크 권한이나 음량을 확인해 주겠느냐?");
+      }
+    }
+  });
+}
+
+// ─── Gemini API 키 설정 모달 및 UI 제어 ───
+document.addEventListener('DOMContentLoaded', () => {
+  const modal = document.getElementById('api-modal');
+  const openBtn = document.getElementById('open-api-btn');
+  const closeBtn = document.getElementById('close-api-btn');
+  const saveBtn = document.getElementById('save-api-btn');
+  const keyInput = document.getElementById('api-key-input');
+
+  // 로컬 스토리지에 저장된 키 로딩
+  const savedKey = localStorage.getItem('gemini_api_key');
+  if (savedKey) {
+    keyInput.value = savedKey;
+  }
+
+  if (openBtn) {
+    openBtn.addEventListener('click', () => {
+      modal.classList.add('visible');
+    });
+  }
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      modal.classList.remove('visible');
+    });
+  }
+  if (saveBtn) {
+    saveBtn.addEventListener('click', () => {
+      localStorage.setItem('gemini_api_key', keyInput.value.trim());
+      alert('Gemini API Key가 안전하게 저장되었습니다!');
+      modal.classList.remove('visible');
+    });
+  }
+});
+
+// ─── 실시간 카메라 캡처 함수 (Canvas Draw) ───
+function captureCameraFrame() {
+  const video = document.querySelector('video');
+  if (!video) {
+    console.warn("[AI Vision] Camera video stream element not found. Using simulation fallback.");
+    return null;
+  }
+  
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    return dataUrl.split(',')[1]; // Base64 바디 데이터 추출
+  } catch (err) {
+    console.error("[AI Vision] Failed to capture video frame:", err);
+    return null;
+  }
+}
+
+// ─── Gemini Vision 1.5 Flash API 통신 함수 (실제 API vs 스마트 시뮬레이션 데모) ───
+async function askGeminiVision(base64Image) {
+  const apiKey = localStorage.getItem('gemini_api_key');
+  
+  // API Key가 미설정된 경우 스마트 시뮬레이터로 자동 대체 (데모용 편의성)
+  if (!apiKey) {
+    console.log("[AI Vision] No API Key set. Running simulated guide.");
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const mockResponses = [
+          {
+            docent_explanation: "오호라! 둥글고 푸근한 백자 달항아리를 비추고 있구나! 위아래를 따로 빚어 붙였기에 생긴 은은한 비대칭의 선이 참으로 조선 선비들의 어진 마음을 닮았단다. 이 푸근하고 너그러운 매력을 가까이서 보거라.",
+            suggested_animation: "hello",
+            quizzes: [
+              {
+                q: "백자 달항아리는 왜 몸체 가운데에 이음새(선)가 보일까요?",
+                opts: ["위아래를 따로 빚어 붙였기 때문", "유약이 흘러내렸기 때문", "오랜 세월이 흘러 금이 갔기 때문"],
+                ans: 0
+              },
+              {
+                q: "달항아리가 주로 생산되고 사용되던 시기는 어느 왕조일까요?",
+                opts: ["고려 시대", "조선 시대", "통일 신라 시대"],
+                ans: 1
+              },
+              {
+                q: "백자 달항아리의 색조는 어떤 백색에 가깝다고 묘사될까요?",
+                opts: ["비취빛 옥색", "따스한 유백색(우유빛)", "차가운 청백색"],
+                ans: 1
+              }
+            ]
+          },
+          {
+            docent_explanation: "음! 비취색이 은은하게 감도는 청자 사자형 뚜껑 향로를 비추고 있구려! 영롱한 청자 유약 속에 살아 움직이는 듯한 조각 기법이 고려 귀족 미술의 진수를 보여주는구나.",
+            suggested_animation: "call",
+            quizzes: [
+              {
+                q: "이 향로의 뚜껑 위에 용맹스럽게 올려진 수호 동물은 무엇일까요?",
+                opts: ["사자", "토끼", "용"],
+                ans: 0
+              },
+              {
+                q: "고려청자의 신비로운 푸른빛을 일컫는 고유 명칭은 무엇일까요?",
+                opts: ["비취색(비색)", "감청색", "황백색"],
+                ans: 0
+              },
+              {
+                q: "이 향로에서 사자가 뚜껑 위에 앉아 입을 벌리고 있는 주된 용도는 무엇일까요?",
+                opts: ["향 연기를 입으로 내뿜기 위해", "화려한 장식용 장난감 역할", "침입자를 막는 무기"],
+                ans: 0
+              }
+            ]
+          },
+          {
+            docent_explanation: "허허! 화면 속에 국보 '청자 호랑이' 형상이 비치고 있네! 나처럼 늠름하고도 해학적인 모습으로 빚어져 액운을 쫓고 복을 불러들이는 듬직한 수호신이란다.",
+            suggested_animation: "hello",
+            quizzes: [
+              {
+                q: "이 영롱한 도자기는 어떤 동물 형상으로 빚어졌을까요?",
+                opts: ["하늘을 나는 용", "해학적인 호랑이", "바다의 해태"],
+                ans: 1
+              },
+              {
+                q: "호랑이 도자기가 띠고 있는 영롱한 청자 빛깔의 핵심 성분은 무엇일까요?",
+                opts: ["구리 분말", "미량의 철분", "미세한 금가루"],
+                ans: 1
+              },
+              {
+                q: "이 호랑이 도자기에서 엿보이는 우리 선조들의 독특한 미적 정서는?",
+                opts: ["해학과 친근함", "극도의 엄숙함", "차가운 화려함"],
+                ans: 0
+              }
+            ]
+          }
+        ];
+        const randomRes = mockResponses[Math.floor(Math.random() * mockResponses.length)];
+        resolve(randomRes);
+      }, 2500); // 2.5초 가상 분석 로딩 연출
+    });
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const requestBody = {
+    contents: [
+      {
+        parts: [
+          {
+            text: "너는 국립중앙박물관의 구수한 호랑이 도슨트 '호선생'이야. 입력된 카메라 프레임 이미지를 분석하고 다음 지시를 엄수해줘.\n" +
+                  "1. 이미지에서 어떤 유물(예: 도자기, 향로, 가구, 불상, 혹은 주변 사물)이 보이는지 분석하고,\n" +
+                  "2. 해당 유물에 대한 재미있고 구수한 해설을 '도슨트 대사'로 2~3줄 지어줘. 반드시 '~란다', '~구려', '~하렴' 같은 구수한 조선시대 호랑이 말투여야 해.\n" +
+                  "3. 해설 대사의 성격에 맞추어 호선생이 표현할 3D 애니메이션 추천(suggested_animation)을 4가지 키워드('hello', 'walk', 'call', 'idle') 중 반드시 하나로 정해줘. (반갑고 친근한 자랑 멘트면 'hello', 수수께끼를 내거나 유물을 둘러볼 땐 'walk', 깊이 있고 진중한 가이드 해설에는 'call', 평조의 서술에는 'idle'을 제안하렴)\n" +
+                  "4. 이 해설을 바탕으로 유저가 풀 수 있는 3지선다 퀴즈를 딱 3개 만들어줘. 질문(q), 보기 3개(opts), 0-based 정답 인덱스(ans)를 작성해.\n" +
+                  "5. 만약 이미지가 어둡거나 유물을 뚜렷하게 알기 힘든 상황이라도, 방 안의 모습이나 가구를 엮어서 한국 전통 미술품(예: 고려청자, 조선백자) 이야기를 해설과 퀴즈로 능청스럽게 지어내주렴. 절대 오류를 내지 마.\n" +
+                  "6. 반드시 제공된 스키마에 따라 JSON 데이터 형식으로만 응답해야 해."
+          },
+          {
+            inlineData: {
+              mimeType: "image/jpeg",
+              data: base64Image
+            }
+          }
+        ]
+      }
+    ],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          docent_explanation: { type: "STRING" },
+          suggested_animation: { 
+            type: "STRING", 
+            enum: ["hello", "walk", "call", "idle"] 
+          },
+          quizzes: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                q: { type: "STRING" },
+                opts: {
+                  type: "ARRAY",
+                  items: { type: "STRING" }
+                },
+                ans: { type: "INTEGER" }
+              },
+              required: ["q", "opts", "ans"]
+            }
+          }
+        },
+        required: ["docent_explanation", "suggested_animation", "quizzes"]
+      },
+      maxOutputTokens: 600,
+      temperature: 0.7
+    }
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (text) {
+      return JSON.parse(text.trim());
+    } else {
+      throw new Error("Empty API response");
+    }
+  } catch (err) {
+    console.error("[AI Vision] Gemini API JSON parsing failed:", err);
+    // API 통신 에러 시 폴백용 기본 퀴즈 구조 반환
+    return {
+      docent_explanation: "허허, 신령스러운 산맥의 기운이 약해 통신이 원활치 않구려. 대신 내가 머릿속에 간직해둔 아름다운 비취색의 청자 향로 이야기를 해 주마.",
+      suggested_animation: "call",
+      quizzes: [
+        {
+          q: "고려청자의 상징이자, 비취 옥빛을 나타내는 색의 이름은?",
+          opts: ["비취색(비색)", "감청색", "황백색"],
+          ans: 0
+        },
+        {
+          q: "청자 투각칠보문향로 뚜껑처럼 구멍을 뚫어 무늬를 새기는 공예 기술은?",
+          opts: ["상감 기법", "투각 기법", "압출 기법"],
+          ans: 1
+        },
+        {
+          q: "이 국보 향로의 받침대 가장자리에서 열심히 떠받치고 있는 앙증맞은 동물은?",
+          opts: ["토끼", "호랑이", "거북이"],
+          ans: 0
+        }
+      ]
+    };
+  }
+}
+
+// 항상 카메라를 바라보게 만드는 빌보드 컴포넌트 (기울어짐/찌그러짐 방지 Y축 회전 전용)
+AFRAME.registerComponent('billboard', {
+  init: function () {
+    this.camPos = new THREE.Vector3();
+    this.selfPos = new THREE.Vector3();
+  },
+  tick: function () {
+    const cameraEl = this.el.sceneEl.camera;
+    if (!cameraEl) return;
+    
+    cameraEl.getWorldPosition(this.camPos);
+    this.el.object3D.getWorldPosition(this.selfPos);
+    
+    // Y축 기준으로만 마주 보게 하여 사선 찌그러짐 원천 차단
+    const angle = Math.atan2(this.camPos.x - this.selfPos.x, this.camPos.z - this.selfPos.z);
+    this.el.object3D.rotation.set(0, angle, 0);
+  }
+});
+
+// ─── 호선생 실시간 음성 합성(TTS) 및 애니메이션 싱크 함수 ───
+function speakDocentText(text, onEndCallback) {
+  if (!('speechSynthesis' in window)) {
+    console.warn("Speech synthesis not supported in this browser.");
+    if (onEndCallback) onEndCallback();
+    return;
+  }
+  
+  // 진행 중인 모든 음성 취소
+  window.speechSynthesis.cancel();
+  
+  // 특수기호나 탭 가이드는 말소리에서 제외
+  const cleanText = text.replace(/\(탭!\)/g, '').trim();
+  
+  const utterance = new SpeechSynthesisUtterance(cleanText);
+  utterance.lang = 'ko-KR';
+  utterance.rate = 0.88;  // 느긋하고 구수한 할아버지 톤 속도
+  utterance.pitch = 0.82; // 중후한 호랑이 목소리 피치
+  
+  // 한국어 남성 목소리가 있으면 우선 매칭
+  const voices = window.speechSynthesis.getVoices();
+  const koVoice = voices.find(v => v.lang.includes('KO') || v.lang.includes('ko'));
+  if (koVoice) {
+    utterance.voice = koVoice;
+  }
+  
+  utterance.onend = () => {
+    if (onEndCallback) onEndCallback();
+  };
+  
+  utterance.onerror = (e) => {
+    console.error("TTS Error:", e);
+    if (onEndCallback) onEndCallback();
+  };
+  
+  window.speechSynthesis.speak(utterance);
+}
+
+// glTF 모델의 애니메이션을 Three.js 레벨에서 직접 제어하는 신뢰성 높은 컴포넌트 (T-Pose 해결책)
+AFRAME.registerComponent('gltf-anims', {
+  schema: {
+    clip: { type: 'string', default: '' }
+  },
+  init: function () {
+    this.mixer = null;
+    this.activeAction = null;
+    
+    const model = this.el.getObject3D('mesh');
+    if (model) {
+      this.initMixer(model);
+    } else {
+      this.el.addEventListener('model-loaded', (e) => {
+        this.initMixer(e.detail.model);
+      });
+    }
+  },
+  initMixer: function (model) {
+    this.mixer = new THREE.AnimationMixer(model);
+    if (this.data.clip) {
+      this.playClip(this.data.clip);
+    }
+  },
+  update: function (oldData) {
+    if (this.data.clip !== oldData.clip) {
+      this.playClip(this.data.clip);
+    }
+  },
+  playClip: function (clipName) {
+    if (!this.mixer) return;
+    const oldAction = this.activeAction;
+    
+    // 모델 루트의 클립 목록 탐색
+    const clips = this.mixer.getRoot().animations || [];
+    const clip = THREE.AnimationClip.findByName(clips, clipName);
+    
+    if (!clip) {
+      console.warn('gltf-anims: clip not found', clipName);
+      return;
+    }
+    
+    const newAction = this.mixer.clipAction(clip);
+    newAction.reset();
+    newAction.setLoop(THREE.LoopRepeat);
+    newAction.play();
+    
+    if (oldAction && oldAction !== newAction) {
+      oldAction.crossFadeTo(newAction, 0.35, true);
+    }
+    this.activeAction = newAction;
+  },
+  tick: function (time, timeDelta) {
+    if (this.mixer) {
+      this.mixer.update(timeDelta / 1000);
+    }
+  }
+});
+
+// 좌우 드래그/터치로 3D 캐릭터 회전하는 커스텀 컴포넌트
+AFRAME.registerComponent('drag-rotate', {
+  schema: { speed: { type: 'number', default: 2.0 } },
+  init: function () {
+    this.ifMouseDown = false;
+    this.x_coords = 0;
+    
+    this.onMouseDown = (event) => {
+      this.ifMouseDown = true;
+      this.x_coords = event.clientX || (event.touches && event.touches[0].clientX);
+    };
+    this.onMouseUp = () => {
+      this.ifMouseDown = false;
+    };
+    this.onMouseMove = (event) => {
+      if (!this.ifMouseDown) return;
+      const clientX = event.clientX || (event.touches && event.touches[0].clientX);
+      const deltaX = clientX - this.x_coords;
+      this.el.object3D.rotation.y += deltaX * (this.data.speed / 1000);
+      this.x_coords = clientX;
+    };
+    
+    window.addEventListener('mousedown', this.onMouseDown);
+    window.addEventListener('mouseup', this.onMouseUp);
+    window.addEventListener('mousemove', this.onMouseMove);
+    window.addEventListener('touchstart', this.onMouseDown);
+    window.addEventListener('touchend', this.onMouseUp);
+    window.addEventListener('touchmove', this.onMouseMove);
+  },
+  remove: function () {
+    window.removeEventListener('mousedown', this.onMouseDown);
+    window.removeEventListener('mouseup', this.onMouseUp);
+    window.removeEventListener('mousemove', this.onMouseMove);
+    window.removeEventListener('touchstart', this.onMouseDown);
+    window.removeEventListener('touchend', this.onMouseUp);
+    window.removeEventListener('touchmove', this.onMouseMove);
+  }
+});
+
+// 한글 텍스트를 말풍선 모양 Canvas로 그려 3D 텍스처로 반환/주입하는 유틸리티
+function updateSpeechBubble(planeEl, text) {
+  if (!planeEl) return;
+
+  const draw = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    
+    ctx.clearRect(0, 0, 512, 128);
+    
+    // 둥근 모서리 사각형 말풍선 (테두리 없이 깔끔한 흰색 배경)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    
+    const x = 12, y = 12, w = 488, h = 94, r = 18;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    
+    // 말풍선 아래쪽 꼭짓점 (꼬리)
+    ctx.lineTo(256 + 15, y + h);
+    ctx.lineTo(256, y + h + 12);
+    ctx.lineTo(256 - 15, y + h);
+    
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fill();
+    
+    // 텍스트 스타일링 (검은색 텍스트 - 글자 크기 축소 및 마진 최적화)
+    ctx.fillStyle = '#0a0d12'; // 어두운 색상
+    ctx.font = 'bold 17px "Noto Serif KR", serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 256, 56);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    
+    const mesh = planeEl.getObject3D('mesh');
+    if (mesh) {
+      if (mesh.material.map) {
+        mesh.material.map.dispose();
+      }
+      mesh.material.map = texture;
+      mesh.material.needsUpdate = true;
+      planeEl.setAttribute('visible', true);
+      
+      // 말풍선 대사 교체 시 쫀득하게 커지는 탄성 물리 스케일 연출 (AI 3D 애니메이션 풍부화)
+      planeEl.setAttribute('scale', '0.1 0.1 0.1');
+      let scaleVal = 0.1;
+      const springBounce = () => {
+        scaleVal += (1.0 - scaleVal) * 0.24; // 감쇠 스프링 보간 공식
+        planeEl.setAttribute('scale', `${scaleVal} ${scaleVal} ${scaleVal}`);
+        if (1.0 - scaleVal > 0.005) {
+          requestAnimationFrame(springBounce);
+        } else {
+          planeEl.setAttribute('scale', '1 1 1');
+        }
+      };
+      springBounce();
+    }
+  };
+
+  // 3D Plane Mesh가 생성 완료되었으면 즉시 드로잉, 아니면 로드 완료 후 드로잉
+  if (planeEl.getObject3D('mesh')) {
+    draw();
+  } else {
+    planeEl.addEventListener('loaded', draw, { once: true });
+  }
+}
+
+// 호랑이 액션(가시성 및 재생 속도)을 조율하는 도우미 함수 (A-Frame 표준 animation-mixer 기반)
+function activeMotion(scene, motionName) {
+  const walk = scene.querySelector('#char-walk');
+  const hello = scene.querySelector('#char-hello');
+  const call = scene.querySelector('#char-call');
+  
+  if (walk)  walk.setAttribute('visible', false);
+  if (hello) hello.setAttribute('visible', false);
+  if (call)  call.setAttribute('visible', false);
+  
+  if (motionName === 'idle') {
+    // 유휴(Idle) 상태에서는 캐릭터를 가만히 정지 서 있게 만들어 차분한 대기 자세 연출
+    if (call) {
+      call.setAttribute('visible', true);
+      call.setAttribute('animation-mixer', {
+        clip: 'Armature|Call_Gesture|baselayer',
+        timeScale: 0,
+        loop: 'once',
+        clampWhenFinished: true
+      });
+    }
+  } else if (motionName === 'hello') {
+    if (hello) {
+      hello.setAttribute('visible', true);
+      hello.setAttribute('animation-mixer', {
+        clip: 'Armature|Big_Wave_Hello|baselayer',
+        timeScale: 1.0,
+        loop: 'repeat'
+      });
+    }
+  } else if (motionName === 'call') {
+    if (call) {
+      call.setAttribute('visible', true);
+      call.setAttribute('animation-mixer', {
+        clip: 'Armature|Call_Gesture|baselayer',
+        timeScale: 1.0,
+        loop: 'repeat'
+      });
+    }
+  } else if (motionName === 'walk') {
+    if (walk) {
+      walk.setAttribute('visible', true);
+      walk.setAttribute('animation-mixer', {
+        clip: 'Armature|walking_man|baselayer',
+        timeScale: 1.0,
+        loop: 'repeat'
+      });
+    }
+  }
+}
+
+// 1단계: 카메라가 켜지면 즉시 바로 앞에 유휴 포즈로 멈춰 서기
+// 동적 AI 퀴즈 저장소
+let dynamicQuizzes = [];
+
+let docentStep = 0;
+let aiGeneratedText = "";
+let aiSuggestedAnimation = "call";
+let isScanning = false;
+let currentQuizIdx = 0;
+let kilnTemp = 1000;
+let kilnFlickerInterval = null;
+
+function startDocentScenario(scene, charWorld) {
+  if (!charWorld) return;
+  
+  // 캐릭터의 초기 3D 월드 좌표계 설정
+  charWorld.object3D.position.set(0, -0.4, -1.5);
+  charWorld.setAttribute('visible', true);
+  
+  const speechBubble = scene.querySelector('#speech-bubble');
+
+  // ─── FlowController 의존성 주입 (새 아키텍처) ───
+  flowCtrl = new FlowController({
+    artworkId: 'camera-scan',
+    captureFrame: () => captureCameraFrame(),
+    setAnimation: (name) => activeMotion(scene, name),
+    setSpeechBubble: (text) => updateSpeechBubble(speechBubble, text),
+    showQuizUI: (quiz, onAnswer) => {
+      document.getElementById('quiz-overlay').classList.add('visible');
+      renderQuizFromFlow(quiz, onAnswer);
+    },
+    hideQuizUI: () => {
+      document.getElementById('quiz-overlay').classList.remove('visible');
+    },
+    showResultUI: (isSuccess, data) => {
+      document.getElementById('result-overlay').classList.add('visible');
+    },
+    hideResultUI: () => {
+      document.getElementById('result-overlay').classList.remove('visible');
+    },
+    showMissionUI: (mission, onAccept) => {
+      showMissionModal(mission, onAccept);
+    },
+    hideMissionUI: () => {
+      hideMissionModal();
+    },
+    updateKilnTemp: (temp) => {
+      kilnTemp = temp;
+      updateKilnTempUI();
+    },
+  });
+
+  flowCtrl.addEventListener('state-change', (e) => {
+    console.log(`[Flow] ${e.detail.from} → ${e.detail.to}`);
+  });
+
+  // 퀴즈 결과창 관련 DOM 리스너 등록
+  const actionBtn = document.getElementById('result-action-btn');
+  const retryBtn = document.getElementById('result-retry-btn');
+  
+  actionBtn.onclick = () => {
+    document.getElementById('result-overlay').classList.remove('visible');
+    if (flowCtrl) {
+      flowCtrl.reset();
+      flowCtrl.start();
+    }
+  };
+  
+  retryBtn.onclick = () => {
+    document.getElementById('result-overlay').classList.remove('visible');
+    if (flowCtrl) {
+      flowCtrl.reset();
+      flowCtrl.start();
+    }
+  };
+
+  // 화면 탭으로 다음 단계 진행
+  if (!window.__clickListenerRegistered) {
+    window.__clickListenerRegistered = true;
+    window.addEventListener('click', () => {
+      if (flowCtrl && !flowCtrl._transitioning) {
+        flowCtrl.next();
+      }
+    });
+  }
+
+  // 흐름 시작
+  flowCtrl.start();
+}
+
+function resetGame(scene, charWorld) {
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+  docentStep = 0;
+  currentQuizIdx = 0;
+  kilnTemp = 1000;
+  aiGeneratedText = "";
+  dynamicQuizzes = [];
+  isScanning = false;
+  
+  const fire = scene.querySelector('#kiln-fire-light');
+  if (fire) fire.setAttribute('light', 'intensity', 0);
+  if (kilnFlickerInterval) {
+    clearInterval(kilnFlickerInterval);
+    kilnFlickerInterval = null;
+  }
+  
+  const speechBubble = scene.querySelector('#speech-bubble');
+  runStep(0, scene, charWorld, speechBubble, null);
+}
+
+function initDocentTimeline(scene, charWorld) {
+  const speechBubble = scene.querySelector('#speech-bubble');
+  
+  const nextStep = async () => {
+    if (isScanning) return; // 중복 탭 방지
+    if (docentStep >= 5) return; // 퀴즈 진행 중엔 말풍선 탭으로 단계 넘기지 않음
+    
+    try {
+      docentStep++;
+      console.log(`[Timeline] nextStep: docentStep=${docentStep}`);
+      runStep(docentStep, scene, charWorld, speechBubble, null);
+    } catch (err) {
+      console.error("[Timeline] Error:", err);
+      isScanning = false;
+      resetGame(scene, charWorld);
+    }
+  };
+  
+  // 말풍선 드래그 이동 상태 변수들
+  let isDraggingBubble = false;
+  let dragStartPos = { x: 0, y: 0 };
+  let bubbleStartPos = { x: 0, y: 0 };
+  let totalDragDistance = 0;
+  let preventClickFlag = false;
+  
+  const onGlobalMouseDown = (e) => {
+    if (!scene.canvas) return;
+    
+    const clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY);
+    if (clientX === undefined || clientY === undefined) return;
+    
+    dragStartPos.x = clientX;
+    dragStartPos.y = clientY;
+    totalDragDistance = 0;
+    preventClickFlag = false;
+  
+    const rect = scene.canvas.getBoundingClientRect();
+    const mouse = new THREE.Vector2();
+    mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    
+    const camera = scene.camera;
+    if (!camera) return;
+    
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, camera);
+    
+    const bubbleObj = speechBubble.object3D;
+    if (bubbleObj) {
+      bubbleObj.updateMatrixWorld(true);
+      const intersects = raycaster.intersectObject(bubbleObj, true);
+      
+      if (intersects.length > 0) {
+        isDraggingBubble = true;
+        const pos = speechBubble.getAttribute('position') || { x: 0, y: 0.38, z: -1.5 };
+        bubbleStartPos = { x: Number(pos.x), y: Number(pos.y) };
+        if (e.cancelable) e.preventDefault();
+      }
+    }
+  };
+  
+  const onGlobalMouseMove = (e) => {
+    const clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY);
+    if (clientX === undefined || clientY === undefined) return;
+    
+    const deltaX = clientX - dragStartPos.x;
+    const deltaY = clientY - dragStartPos.y;
+    totalDragDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    
+    if (totalDragDistance > 10) {
+      preventClickFlag = true;
+    }
+    
+    if (isDraggingBubble) {
+      const factor = 0.003;
+      const newX = bubbleStartPos.x + deltaX * factor;
+      const newY = bubbleStartPos.y - deltaY * factor;
+      speechBubble.setAttribute('position', `${newX} ${newY} -1.5`);
+    }
+  };
+  
+  const onGlobalMouseUp = () => {
+    if (preventClickFlag) {
+      isDraggingBubble = false;
+      preventClickFlag = false;
+      return;
+    }
+    isDraggingBubble = false;
+    nextStep();
+  };
+  
+  window.addEventListener('mousedown', onGlobalMouseDown);
+  window.addEventListener('touchstart', onGlobalMouseDown, { passive: false });
+  window.addEventListener('mousemove', onGlobalMouseMove);
+  window.addEventListener('touchmove', onGlobalMouseMove, { passive: true });
+  window.addEventListener('mouseup', onGlobalMouseUp);
+  window.addEventListener('touchend', onGlobalMouseUp);
+  
+  runStep(0, scene, charWorld, speechBubble, null);
+}
+
+// 단계별 도슨트 시나리오 제어
+async function runStep(step, scene, charWorld, speechBubble, nextBtn) {
+  switch(step) {
+    case 0:
+      activeMotion(scene, 'hello');
+      const greeting = "안녕! 난 도슨트 호선생이야. 오늘 나와 함께 카메라로 유물을 탐색하고 퀴즈 게임을 해보자꾸나! (탭!)";
+      updateSpeechBubble(speechBubble, greeting);
+      speakDocentText(greeting, () => {
+        activeMotion(scene, 'idle');
+      });
+      break;
+    case 1:
+      activeMotion(scene, 'idle');
+      const intro = "우선 가마에 구워보고 싶은 우리 미술품이나 주위 사물을 카메라 가득 비추고 나를 탭하려무나!";
+      updateSpeechBubble(speechBubble, intro);
+      speakDocentText(intro);
+      break;
+    case 2:
+      // 스캔 분석 시작 (시뮬레이션 또는 실제 비전 API 호출)
+      isScanning = true;
+      activeMotion(scene, 'walk');
+      const scanning = "가마의 영험한 기운으로 비추고 있는 작품을 살펴보고 있단다... 잠시만 기다리려무나!";
+      updateSpeechBubble(speechBubble, scanning);
+      speakDocentText(scanning);
+      
+      // 카메라 비디오 이미지 캡처
+      const base64Img = captureCameraFrame();
+      // Gemini AI 호출로 해설 및 퀴즈 세트를 동시 JSON 생성
+      try {
+        const result = await askGeminiVision(base64Img);
+        aiGeneratedText = result.docent_explanation;
+        aiSuggestedAnimation = result.suggested_animation || 'call';
+        dynamicQuizzes = result.quizzes;
+      } catch (err) {
+        console.error("Failed to parse Gemini response:", err);
+      }
+      isScanning = false;
+      
+      docentStep = 3;
+      runStep(3, scene, charWorld, speechBubble, null);
+      break;
+      
+    case 3:
+      activeMotion(scene, aiSuggestedAnimation);
+      updateSpeechBubble(speechBubble, aiGeneratedText);
+      speakDocentText(aiGeneratedText, () => {
+        activeMotion(scene, 'idle');
+      });
+      break;
+      
+    case 4:
+      activeMotion(scene, 'hello');
+      const quizIntro = "허허, 참 재미있는 유물이지 않느냐? 그럼 이제 이 작품에 관한 퀴즈를 맞히고 가마 온도를 1300도까지 올려보자꾸나! (탭!)";
+      updateSpeechBubble(speechBubble, quizIntro);
+      speakDocentText(quizIntro, () => {
+        activeMotion(scene, 'idle');
+      });
+      break;
+      
+    case 5:
+      // 퀴즈 시작 전에 음성 낭독 강제 중단
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      // 퀴즈 개시
+      startQuizGame(scene);
+      break;
+      
+    default:
+      break;
+  }
+}
+
+function startQuizGame(scene) {
+  currentQuizIdx = 0;
+  kilnTemp = 1000;
+  
+  // 가마 불빛 가동 (Intensity 펄싱 효과 추가로 현장감 상승)
+  const fire = scene.querySelector('#kiln-fire-light');
+  if (fire) {
+    fire.setAttribute('light', 'color', '#ff4400');
+    
+    const lightObj = fire.getObject3D('light');
+    if (lightObj) {
+      lightObj.intensity = 1.8;
+    } else {
+      fire.setAttribute('light', 'intensity', 1.8);
+    }
+    
+    // 불꽃 흔들림(Flicker) 애니메이션 인터벌 - Three.js 직접 수정으로 레이아웃 병목 제거
+    kilnFlickerInterval = setInterval(() => {
+      const randomIntensity = 1.4 + Math.random() * 0.8;
+      const l = fire.getObject3D('light');
+      if (l) {
+        l.intensity = randomIntensity;
+      } else {
+        fire.setAttribute('light', 'intensity', randomIntensity);
+      }
+    }, 120);
+  }
+  
+  // 퀴즈 오버레이 표시
+  document.getElementById('quiz-overlay').classList.add('visible');
+  renderQuiz();
+}
+
+function renderQuizFromFlow(quiz, onAnswer) {
+  if (!quiz) return;
+  const qNumEl = document.getElementById('quiz-question-num');
+  const qEl = document.getElementById('quiz-question');
+  const optsEl = document.getElementById('quiz-options');
+  
+  if (flowCtrl) {
+    qNumEl.textContent = `가마 상태 · 문제 ${flowCtrl.currentQuizIdx + 1} / ${flowCtrl.quizzes.length}`;
+  } else {
+    qNumEl.textContent = `가마 상태 · 문제`;
+  }
+  qEl.textContent = quiz.q;
+  optsEl.innerHTML = '';
+  
+  updateKilnTempUI();
+  
+  quiz.opts.forEach((optText, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'quiz-opt-btn';
+    
+    const numSpan = document.createElement('span');
+    numSpan.className = 'quiz-opt-num';
+    numSpan.textContent = `${idx + 1}.`;
+    
+    const textSpan = document.createElement('span');
+    textSpan.textContent = optText;
+    
+    btn.appendChild(numSpan);
+    btn.appendChild(textSpan);
+    
+    btn.onclick = () => {
+      onAnswer(idx);
+    };
+    optsEl.appendChild(btn);
+  });
+}
+
+function showMissionModal(mission, onAccept) {
+  if (!mission) return;
+  const overlay = document.getElementById('mission-overlay');
+  const icon = document.getElementById('mission-icon');
+  const title = document.getElementById('mission-title');
+  const desc = document.getElementById('mission-desc');
+  const btn = document.getElementById('mission-accept-btn');
+  
+  if (icon && mission.icon) icon.textContent = mission.icon;
+  if (title) title.textContent = mission.title || "미션 카드";
+  if (desc) desc.textContent = mission.description;
+  if (btn) {
+    btn.textContent = mission.acceptText || "미션 수락!";
+    btn.onclick = () => {
+      if (onAccept) onAccept();
+    };
+  }
+  
+  if (overlay) overlay.classList.add('visible');
+}
+
+function hideMissionModal() {
+  const overlay = document.getElementById('mission-overlay');
+  if (overlay) overlay.classList.remove('visible');
+}
+
+function renderQuiz() {
+  if (dynamicQuizzes.length === 0) {
+    // 혹시라도 퀴즈가 비어있다면 긴급 복구용 기본 데이터 생성
+    dynamicQuizzes = [
+      { q: "고려청자의 신비로운 푸른빛을 일컫는 말은?", opts: ["비취색", "감청색", "황백색"], ans: 0 },
+      { q: "흙을 파내서 구멍을 뚫어 문양을 만드는 기법은?", opts: ["상감 기법", "투각 기법", "압출 기법"], ans: 1 },
+      { q: "가마 완성 온도는 몇 도일까요?", opts: ["800도", "1300도", "2000도"], ans: 1 }
+    ];
+  }
+
+  const quiz = dynamicQuizzes[currentQuizIdx];
+  const qNumEl = document.getElementById('quiz-question-num');
+  const qEl = document.getElementById('quiz-question');
+  const optsEl = document.getElementById('quiz-options');
+  
+  qNumEl.textContent = `가마 상태 · 문제 ${currentQuizIdx + 1} / ${dynamicQuizzes.length}`;
+  qEl.textContent = quiz.q;
+  optsEl.innerHTML = '';
+  
+  // 온도 바 갱신
+  updateKilnTempUI();
+  
+  quiz.opts.forEach((optText, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'quiz-opt-btn';
+    
+    const numSpan = document.createElement('span');
+    numSpan.className = 'quiz-opt-num';
+    numSpan.textContent = `${idx + 1}.`;
+    
+    const textSpan = document.createElement('span');
+    textSpan.textContent = optText;
+    
+    btn.appendChild(numSpan);
+    btn.appendChild(textSpan);
+    
+    btn.onclick = () => selectAnswer(idx);
+    optsEl.appendChild(btn);
+  });
+}
+
+function updateKilnTempUI() {
+  const fill = document.getElementById('kiln-temp-fill');
+  const val = document.getElementById('kiln-temp-val');
+  
+  // 1000도(0%) ~ 1300도(100%) 환산
+  const percentage = ((kilnTemp - 1000) / 300) * 100;
+  fill.style.width = `${percentage}%`;
+  val.textContent = `${kilnTemp}°C`;
+}
+
+function selectAnswer(selectedIdx) {
+  const quiz = dynamicQuizzes[currentQuizIdx];
+  const isCorrect = selectedIdx === quiz.ans;
+  
+  if (isCorrect) {
+    // 퀴즈 진행에 따라 온도 순차 상승 (1100 -> 1200 -> 1300)
+    kilnTemp = 1000 + (currentQuizIdx + 1) * 100;
+    updateKilnTempUI();
+    
+    // 정답 시 호선생의 실감 나는 응원 음성 보이스
+    const cheers = ["정답이란다! 솜씨가 아주 일품이구나!", "오호라! 맞았구나, 가마 온도가 솟구치는도다!", "허허, 역시 내 해설을 귀담아들었구려!"];
+    const randomCheer = cheers[Math.floor(Math.random() * cheers.length)];
+    speakDocentText(randomCheer);
+    
+    // 정답 시 호선생 발밑 불빛 잠시 강렬하게 솟구침
+    const fire = document.querySelector('#kiln-fire-light');
+    if (fire) {
+      const l = fire.getObject3D('light');
+      if (l) {
+        l.intensity = 3.5;
+        setTimeout(() => {
+          if (kilnTemp < 1300) l.intensity = 1.8;
+        }, 300);
+      } else {
+        fire.setAttribute('light', 'intensity', 3.5);
+        setTimeout(() => {
+          if (kilnTemp < 1300) fire.setAttribute('light', 'intensity', 1.8);
+        }, 300);
+      }
+    }
+    
+    currentQuizIdx++;
+    if (currentQuizIdx >= dynamicQuizzes.length) {
+      // 퀴즈 전체 클리어 -> 성공
+      setTimeout(() => finishGame(true), 600);
+    } else {
+      // 다음 문제
+      setTimeout(renderQuiz, 1200); // 음성을 조금 들을 수 있게 지연시간 1.2초로 상향
+    }
+  } else {
+    // 오답 시 즉시 게임 오버
+    setTimeout(() => finishGame(false), 500);
+  }
+}
+
+function finishGame(isSuccess) {
+  // 퀴즈창 닫고 결과창 띄우기
+  document.getElementById('quiz-overlay').classList.remove('visible');
+  const overlay = document.getElementById('result-overlay');
+  overlay.classList.add('visible');
+  
+  const icon = document.getElementById('result-icon');
+  const title = document.getElementById('result-title');
+  const desc = document.getElementById('result-desc');
+  const retryBtn = document.getElementById('result-retry-btn');
+  const actionBtn = document.getElementById('result-action-btn');
+  
+  const fire = document.querySelector('#kiln-fire-light');
+  
+  // 가마 흔들림 제거
+  if (kilnFlickerInterval) {
+    clearInterval(kilnFlickerInterval);
+    kilnFlickerInterval = null;
+  }
+  
+  if (isSuccess) {
+    // 성공 시 가마 불빛 영롱한 에메랄드/비취색 변환 후 소멸 연출
+    if (fire) {
+      fire.setAttribute('light', 'color', '#aeffd8');
+      const l = fire.getObject3D('light');
+      if (l) {
+        l.intensity = 3.0;
+      } else {
+        fire.setAttribute('light', 'intensity', 3.0);
+      }
+      
+      // 부드럽게 페이드 아웃
+      let curInt = 3.0;
+      const fadeLight = () => {
+        curInt -= 0.05;
+        if (curInt > 0.3) {
+          const innerL = fire.getObject3D('light');
+          if (innerL) {
+            innerL.intensity = curInt;
+          } else {
+            fire.setAttribute('light', 'intensity', curInt);
+          }
+          requestAnimationFrame(fadeLight);
+        } else {
+          const innerL = fire.getObject3D('light');
+          if (innerL) {
+            innerL.intensity = 0.2;
+          } else {
+            fire.setAttribute('light', 'intensity', 0.2); // 약간의 감상용 잔광
+          }
+        }
+      };
+      setTimeout(fadeLight, 1000);
+    }
+    
+    icon.textContent = "🍶";
+    title.textContent = "가마 굽기 대성공!";
+    const winMsg = "대단하구나! 가마 온도가 1300도에 도달하여 비춘 작품에 걸맞은 영롱하고 아름다운 자기가 가마에서 깨짐 없이 고이 구워져 나왔단다! 넌 참으로 훌륭한 고려 제일의 명장 도공이로다!";
+    desc.textContent = winMsg;
+    retryBtn.style.display = 'none';
+    actionBtn.textContent = "확인";
+    
+    // 최종 성공 축하 음성 출력
+    speakDocentText(winMsg);
+    
+    // Confetti 축하
+    startConfetti();
+  } else {
+    // 실패 시 가마 불 꺼짐
+    if (fire) {
+      const l = fire.getObject3D('light');
+      if (l) {
+        l.intensity = 0;
+      } else {
+        fire.setAttribute('light', 'intensity', 0);
+      }
+    }
+    
+    icon.textContent = "💥";
+    title.textContent = "가마 굽기 실패...";
+    const failMsg = "아이고, 쩍! 불 온도가 맞지 않아 그만 도자기가 가마 안에서 깨져버렸구나... 실패는 성공의 어머니라 했으니, 내 설명을 다시 귀담아듣고 재도전해 보겠느냐?";
+    desc.textContent = failMsg;
+    retryBtn.style.display = 'block';
+    actionBtn.textContent = "처음으로 돌아가기";
+    actionBtn.onclick = () => {
+      document.getElementById('result-overlay').classList.remove('visible');
+      resetGame(document.querySelector('a-scene'), document.querySelector('#char-world'));
+    };
+    
+    // 실패 위로 음성 출력
+    speakDocentText(failMsg);
+  }
+}
+
+// 가볍고 화려한 Confetti 효과 스크립트
+function startConfetti() {
+  const canvas = document.getElementById('confetti-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const colors = ['#c8a55b', '#4a8576', '#88c4b1', '#ffffff', '#ebe5d6'];
+  const particles = [];
+  
+  for (let i = 0; i < 80; i++) {
+    particles.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height - canvas.height,
+      r: Math.random() * 6 + 4,
+      d: Math.random() * canvas.height,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      tilt: Math.random() * 10 - 5,
+      tiltAngleIncremental: Math.random() * 0.07 + 0.02,
+      tiltAngle: 0
+    });
+  }
+
+  let animationId;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let active = false;
+    particles.forEach((p, idx) => {
+      p.tiltAngle += p.tiltAngleIncremental;
+      p.y += (Math.cos(p.d) + 3 + p.r / 2) / 2;
+      p.x += Math.sin(p.tiltAngle);
+      p.tilt = Math.sin(p.tiltAngle - idx / 3) * 15;
+
+      if (p.y < canvas.height) {
+        active = true;
+      } else {
+        p.y = -20;
+        p.x = Math.random() * canvas.width;
+      }
+
+      ctx.beginPath();
+      ctx.lineWidth = p.r;
+      ctx.strokeStyle = p.color;
+      ctx.moveTo(p.x + p.tilt + p.r / 2, p.y);
+      ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r / 2);
+      ctx.stroke();
+    });
+
+    if (active && window.__confettiActive) {
+      animationId = requestAnimationFrame(draw);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  window.__confettiActive = true;
+  draw();
+  
+  // 5초 후에 자동 종료
+  setTimeout(() => {
+    window.__confettiActive = false;
+  }, 5000);
+}
+
+const $ = (sel) => document.querySelector(sel);
+const dbg = (msg) => { $('#dbg').textContent = msg; };
+const err = (msg) => { const e = $('#err'); e.textContent = msg; e.classList.add('show'); };
+
+// ─── 모델 경로 (실제 배포 시 ./assets/ 경로 또는 CDN 호스트) ───
+const MODEL = {
+  walk:   './assets/Meshy_AI_Spiral_Tiger_Figurine_biped_Animation_Walking_withSkin.glb',
+  hello:  './assets/Meshy_AI_Spiral_Tiger_Figurine_biped_Animation_Big_Wave_Hello_withSkin.glb',
+  call:   './assets/Meshy_AI_Spiral_Tiger_Figurine_biped_Animation_Call_Gesture_withSkin.glb',
+};
+
+// 마커 NFT 데이터셋 (AR.js NFT는 .fset/.fset3/.iset 트리플 파일 필요 — 호스팅 경로)
+// MindAR은 .mind 컴파일 파일 1개 — 더 가볍고 단순함.
+const MARKERS = {
+  mindar: './assets/markers/celadon.mind',   // 컴파일 산출물 placeholder
+  arjs:   './assets/markers/celadon',        // .fset/.iset prefix
+};
+
+// ──────────────────────────────────────────────
+// 1. 모드 선택 → 부팅
+// ──────────────────────────────────────────────
+let chosenMode = null;
+
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    // iOS Safari TTS: 최초 사용자 제스처 안에서 warmup 필수
+    warmupTTS();
+
+    chosenMode = btn.dataset.mode;
+    $('#mode-tag').textContent = ({
+      'mindar':    'MindAR Image',
+      'arjs':      'AR.js NFT',
+      'nav-only':  'AR Docent',
+    })[chosenMode];
+    try {
+      await bootstrapApp(chosenMode);
+      $('#boot').classList.add('hidden');
+      $('#hud').classList.remove('hidden');
+      document.getElementById('mic-btn')?.classList.remove('hidden');
+    } catch (e) {
+      err('초기화 실패: ' + (e.message || e));
+    }
+  });
+});
+
+// ──────────────────────────────────────────────
+// 2. 부팅 — Scene 구성 + 카메라 권한 획득
+// ──────────────────────────────────────────────
+async function bootstrapApp(mode) {
+  // (1) Scene HTML 동적 생성 — 모드에 따라 라이브러리 분기
+  const stage = $('#ar-stage');
+
+  let sceneHTML = '';
+  if (mode === 'mindar') {
+    // MindAR: <a-scene mindar-image="imageTargetSrc:..."> 형태
+    sceneHTML = `
+      <a-scene
+        mindar-image="imageTargetSrc: ${MARKERS.mindar}; autoStart: false; uiLoading: no; uiError: no; uiScanning: no;"
+        embedded color-space="sRGB"
+        renderer="colorManagement: true; physicallyCorrectLights: true; antialias: false; alpha: true; precision: mediump;"
+        vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+
+        <a-assets>
+          <a-asset-item id="modelWalk"  src="${MODEL.walk}"></a-asset-item>
+          <a-asset-item id="modelCall"  src="${MODEL.call}"></a-asset-item>
+        </a-assets>
+
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <!-- 마커 0번 앵커: 청자 작품 마커 -->
+        <a-entity id="marker-anchor" mindar-image-target="targetIndex: 0">
+          <a-entity id="char-marker" scale="0.5 0.5 0.5" rotation="0 180 0" position="0 0 0.1"
+                    gltf-model="#modelCall" drag-rotate
+                    animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat"></a-entity>
+        </a-entity>
+
+        <!-- 월드 캐릭터: NAVIGATION 모드에서만 visible -->
+        <a-entity id="char-world" visible="false"
+                  position="0 -0.4 -1.5" scale="0.35 0.35 0.35" rotation="0 0 0" drag-rotate
+                  gltf-model="#modelWalk"
+                  animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat"></a-entity>
+      </a-scene>`;
+  } else if (mode === 'arjs') {
+    sceneHTML = `
+      <a-scene
+        embedded arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix;"
+        renderer="colorManagement: true; physicallyCorrectLights: true; antialias: false; alpha: true; precision: mediump;"
+        vr-mode-ui="enabled: false">
+
+        <a-assets>
+          <a-asset-item id="modelWalk" src="${MODEL.walk}"></a-asset-item>
+          <a-asset-item id="modelCall" src="${MODEL.call}"></a-asset-item>
+        </a-assets>
+
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <a-nft id="marker-anchor" type="nft" url="${MARKERS.arjs}"
+               smooth="true" smoothCount="10" smoothTolerance="0.01" smoothThreshold="5">
+          <a-entity id="char-marker" scale="80 80 80" rotation="-90 0 0" position="100 0 0"
+                    gltf-model="#modelCall"
+                    animation-mixer="clip: *; loop: repeat"></a-entity>
+        </a-nft>
+
+        <a-entity id="char-world" visible="false"
+                  position="0 -0.4 -1.5" scale="0.35 0.35 0.35"
+                  gltf-model="#modelWalk"
+                  animation-mixer="clip: *; loop: repeat"></a-entity>
+      </a-scene>`;
+  } else {
+    // nav-only — 마커 라이브러리 미사용, getUserMedia 단독 + A-Frame 기본
+    sceneHTML = `
+      <video id="bg-video" autoplay playsinline muted
+             style="position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:-1;"></video>
+      <a-scene embedded cursor="rayOrigin: mouse" raycaster="objects: #speech-bubble"
+        renderer="colorManagement: true; physicallyCorrectLights: true; antialias: false; alpha: true; precision: mediump;"
+        vr-mode-ui="enabled: false"
+        style="position:absolute;inset:0;z-index:1;">
+
+        <a-assets>
+          <a-asset-item id="modelWalk" src="${MODEL.walk}"></a-asset-item>
+          <a-asset-item id="modelHello" src="${MODEL.hello}"></a-asset-item>
+          <a-asset-item id="modelCall" src="${MODEL.call}"></a-asset-item>
+        </a-assets>
+
+        <a-camera position="0 0 0" look-controls="enabled: true; magicWindowTrackingEnabled: true; touchEnabled: false; mouseEnabled: false"></a-camera>
+
+        <a-entity id="char-world" visible="false"
+                  position="0 -0.4 -6" scale="0.35 0.35 0.35" rotation="0 0 0" drag-rotate>
+          
+          <!-- 1. 걷기 모션 호랑이 -->
+          <a-entity id="char-walk" visible="false" gltf-model="#modelWalk" rotation="0 180 0" animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+          <!-- 2. 인사 모션 호랑이 -->
+          <a-entity id="char-hello" visible="false" gltf-model="#modelHello" rotation="0 180 0" animation-mixer="clip: Armature|Big_Wave_Hello|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+          <!-- 3. 설명 모션 호랑이 -->
+          <a-entity id="char-call" visible="false" gltf-model="#modelCall" rotation="0 180 0" animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+        </a-entity>
+        
+        <!-- 가마 불빛 (평소에는 꺼져있고 퀴즈 게임 시 호선생 발밑에서 빨간 라이트로 빛남) -->
+        <a-light id="kiln-fire-light" type="point" color="#ff4400" intensity="0" distance="3.0" position="0 -0.4 -1.5"></a-light>
+        
+        <!-- 월드 루트 밖의 독립된 말풍선 (스케일 왜곡 방지 및 클릭 레이캐스팅 보장) -->
+        <a-plane id="speech-bubble" position="0 0.38 -1.5" width="0.82" height="0.21" 
+                 class="clickable"
+                 material="shader: flat; transparent: true; side: double; depthTest: false;" 
+                 billboard visible="true"></a-plane>
+      </a-scene>`;
+  }
+  stage.innerHTML = sceneHTML;
+  
+  // AR 모드 활성화 시 body/html 불투명 배경을 투명하게 관통
+  document.body.style.background = "transparent";
+  document.body.style.backgroundColor = "transparent";
+  document.documentElement.style.background = "transparent";
+  document.documentElement.style.backgroundColor = "transparent";
+
+  // (2) Scene loaded 대기
+  const scene = stage.querySelector('a-scene');
+  await new Promise(r => scene.hasLoaded ? r() : scene.addEventListener('loaded', r, { once: true }));
+
+  // Three.js 렌더러 투명도 강제 설정 및 씬 백그라운드 무효화
+  if (scene.renderer) {
+    scene.renderer.setClearColor(0x000000, 0);
+  }
+  scene.object3D.background = null;
+
+  // (3) TrackingController 인스턴스화
+  const charWorld  = scene.querySelector('#char-world');
+  const charMarker = scene.querySelector('#char-marker');
+
+  // 비디오 엘리먼트는 라이브러리마다 위치가 다름
+  const videoEl = scene.querySelector('video')
+              || document.querySelector('#arjs-video')
+              || document.querySelector('video');
+
+  const tc = new TrackingController({
+    videoEl, sceneEl: scene, characterEl: charWorld, debug: true,
+  });
+  window.__tc = tc;
+
+  // (4) 청자 셰이더 주입 — gltf 로드 완료 후
+  const applyShaderTo = (entity) => {
+    if (!entity) return;
+    const inject = (evt) => {
+      const obj = entity.getObject3D('mesh');
+      if (!obj) return;
+
+      // 애니메이션 클립 이름 추출
+      const model = evt ? evt.detail.model : null;
+      if (model && model.animations && model.animations.length > 0) {
+        const animNames = model.animations.map(a => a.name).join(', ');
+        dbg(`Model anims: [${animNames}]`);
+        console.log(`[${entity.id}] animations:`, animNames);
+      } else {
+        dbg(`Model loaded: no anims found`);
+      }
+
+      applyCeladonMaterial(obj, 'MUSEUM_DARK');
+    };
+
+    // 로컬 초고속 로딩에 따른 레이스 컨디션 방지: 이미 로딩이 완료된 메시면 즉시 실행
+    if (entity.getObject3D('mesh')) {
+      inject(null);
+    } else {
+      entity.addEventListener('model-loaded', inject);
+    }
+  };
+  applyShaderTo(scene.querySelector('#char-walk'));
+  applyShaderTo(scene.querySelector('#char-hello'));
+  applyShaderTo(scene.querySelector('#char-call'));
+  applyShaderTo(charMarker);
+
+  // (5) 박물관 조명 + 환경맵
+  const threeScene = scene.object3D;
+  setupMuseumLighting(threeScene);
+  
+  const getRenderer = () => {
+    return new Promise((resolve) => {
+      if (scene.renderer) {
+        resolve(scene.renderer);
+      } else {
+        scene.addEventListener('render-target-loaded', () => {
+          resolve(scene.renderer);
+        }, { once: true });
+      }
+    });
+  };
+
+  const renderer = await getRenderer();
+  if (renderer) {
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05; // 밝기를 약 10% 증가 (0.95 -> 1.05)
+    threeScene.environment = createMuseumEnvMap(renderer);
+    dbg(`booted: ${mode} (envMap OK)`);
+  } else {
+    dbg(`booted: ${mode} (no renderer)`);
+  }
+  if (mode === 'nav-only') {
+    const bgVideo = stage.querySelector('#bg-video');
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } }, audio: false,
+      });
+    } catch (camErr) {
+      console.warn("후면 카메라 탐색 실패, 일반 카메라(웹캠)로 폴백합니다:", camErr);
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: true, audio: false,
+      });
+    }
+    bgVideo.srcObject = stream;
+    try {
+      await bgVideo.play();
+    } catch (playErr) {
+      console.error("배경 비디오 자동 재생 실패:", playErr);
+    }
+    tc.video = bgVideo;
+    tc.mediaStream = stream;
+    tc.registerWorldTracker(new WorldTrackerFallback(tc));
+    await tc.enter(STATES.NAVIGATION);
+
+    // (6) 호랑이 캐릭터 즉시 등장 및 등장 시나리오 작동
+    charWorld.setAttribute('visible', true);
+    startDocentScenario(scene, charWorld);
+  } else if (mode === 'mindar') {
+    const system = scene.systems['mindar-image-system'];
+    await system.start();   // MindAR이 카메라까지 알아서 잡음
+    tc.registerWorldTracker(new WorldTrackerFallback(tc));
+    bindMindARMarker(scene, tc, charWorld, charMarker);
+    await tc.enter(STATES.NAVIGATION);
+  } else {
+    // arjs — markerFound/Lost 이벤트 바인딩
+    tc.registerWorldTracker(new WorldTrackerFallback(tc));
+    bindARJSMarker(scene, tc, charWorld, charMarker);
+    await tc.enter(STATES.NAVIGATION);
+  }
+
+  // (7) State 변경 UI 반영
+  tc.addEventListener('state-change', (e) => {
+    const { to } = e.detail;
+    $('#state-pill').dataset.state = to;
+    $('#state-label').textContent = to;
+    const guideBar = $('#guide-bar');
+    if (guideBar) guideBar.classList.toggle('hidden', to !== 'NAVIGATION');
+    const expCard = $('#explain-card');
+    if (expCard) expCard.classList.toggle('visible', to === 'EXPLANATION');
+    // visibility 토글
+    if (charWorld)  charWorld.setAttribute('visible',  to === 'NAVIGATION');
+    if (charMarker) charMarker.setAttribute('visible', to === 'EXPLANATION');
+    dbg(`state=${to}`);
+  });
+
+  // (8) 오디오 (Autoplay Policy: 사용자 제스처 안에서 .play() 호출)
+  const audioBtn = $('#audio-btn');
+  if (audioBtn) {
+    audioBtn.addEventListener('click', () => {
+      if (!window.__docentAudio) {
+        window.__docentAudio = new Audio('./assets/audio/celadon-narration.mp3');
+      }
+      const a = window.__docentAudio;
+      if (a.paused) { a.play().catch(() => {}); audioBtn.textContent = '❚❚'; }
+      else          { a.pause(); audioBtn.textContent = '▶'; }
+    });
+  }
+
+  dbg(`booted: ${mode}`);
+}
+
+// ──────────────────────────────────────────────
+// 마커 이벤트 어댑터
+// ──────────────────────────────────────────────
+function bindMindARMarker(scene, tc, charWorld, charMarker) {
+  const anchor = scene.querySelector('#marker-anchor');
+  anchor.addEventListener('targetFound', () => tc.onMarkerFound('mindar-0', null));
+  anchor.addEventListener('targetLost',  () => tc.onMarkerLost('mindar-0'));
+}
+
+function bindARJSMarker(scene, tc, charWorld, charMarker) {
+  const anchor = scene.querySelector('#marker-anchor');
+  anchor.addEventListener('markerFound', () => tc.onMarkerFound('arjs-nft', null));
+  anchor.addEventListener('markerLost',  () => tc.onMarkerLost('arjs-nft'));
+}
+</script>
+
+</body>
+</html>

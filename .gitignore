@@ -1,0 +1,14 @@
+# ─── 보안: API 키 및 민감 정보 ───
+config.local.js
+.env
+.env.local
+
+# ─── OS ───
+.DS_Store
+Thumbs.db
+
+# ─── IDE ───
+.vscode/
+.idea/
+*.swp
+*.swo
