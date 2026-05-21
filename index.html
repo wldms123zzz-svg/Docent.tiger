@@ -1065,15 +1065,15 @@ function updateSpeechBubble(planeEl, text) {
   const draw = () => {
     const canvas = document.createElement('canvas');
     canvas.width = 512;
-    canvas.height = 128;
+    canvas.height = 256;
     const ctx = canvas.getContext('2d');
     
-    ctx.clearRect(0, 0, 512, 128);
+    ctx.clearRect(0, 0, 512, 256);
     
-    // 둥근 모서리 사각형 말풍선 (테두리 없이 깔끔한 흰색 배경)
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    // 둥근 모서리 사각형 말풍선 (가로 488, 세로 200)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+    const x = 12, y = 12, w = 488, h = 200, r = 18;
     
-    const x = 12, y = 12, w = 488, h = 94, r = 18;
     ctx.beginPath();
     ctx.moveTo(x + r, y);
     ctx.lineTo(x + w - r, y);
@@ -1083,7 +1083,7 @@ function updateSpeechBubble(planeEl, text) {
     
     // 말풍선 아래쪽 꼭짓점 (꼬리)
     ctx.lineTo(256 + 15, y + h);
-    ctx.lineTo(256, y + h + 12);
+    ctx.lineTo(256, y + h + 15);
     ctx.lineTo(256 - 15, y + h);
     
     ctx.lineTo(x + r, y + h);
@@ -1093,15 +1093,47 @@ function updateSpeechBubble(planeEl, text) {
     ctx.closePath();
     ctx.fill();
     
-    // 텍스트 스타일링 (검은색 텍스트 - 글자 크기 축소 및 마진 최적화)
-    ctx.fillStyle = '#0a0d12'; // 어두운 색상
-    ctx.font = 'bold 17px "Noto Serif KR", serif';
+    // 텍스트 스타일링
+    ctx.fillStyle = '#0a0d12';
+    ctx.font = 'bold 20px "Noto Serif KR", serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, 256, 56);
+    
+    // 텍스트 줄바꿈 로직 (말풍선 너비에 맞춰 자동 래핑)
+    const maxWidth = 440;
+    const words = text.split('');
+    const lines = [];
+    let currentLine = '';
+    
+    for (let i = 0; i < words.length; i++) {
+      const char = words[i];
+      const testLine = currentLine + char;
+      const metrics = ctx.measureText(testLine);
+      const testWidth = metrics.width;
+      
+      if (char === '\n') {
+        lines.push(currentLine);
+        currentLine = '';
+      } else if (testWidth > maxWidth && i > 0) {
+        lines.push(currentLine);
+        currentLine = char;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    lines.push(currentLine);
+    
+    // 줄 렌더링
+    const lineHeight = 28;
+    const startY = (h / 2) - ((lines.length - 1) * lineHeight / 2) + y;
+    
+    lines.forEach((lineText, idx) => {
+      ctx.fillText(lineText, 256, startY + (idx * lineHeight));
+    });
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
     
     const mesh = planeEl.getObject3D('mesh');
     if (mesh) {
@@ -1112,23 +1144,23 @@ function updateSpeechBubble(planeEl, text) {
       mesh.material.needsUpdate = true;
       planeEl.setAttribute('visible', true);
       
-      // 말풍선 대사 교체 시 쫀득하게 커지는 탄성 물리 스케일 연출 (AI 3D 애니메이션 풍부화)
-      planeEl.setAttribute('scale', '0.1 0.1 0.1');
+      // A-Frame DOM 변경 대신 Three.js object3D 직접 제어로 성능 및 프레임 갱신 극대화
+      const obj = planeEl.object3D;
+      obj.scale.set(0.1, 0.1, 0.1);
       let scaleVal = 0.1;
       const springBounce = () => {
-        scaleVal += (1.0 - scaleVal) * 0.24; // 감쇠 스프링 보간 공식
-        planeEl.setAttribute('scale', `${scaleVal} ${scaleVal} ${scaleVal}`);
+        scaleVal += (1.0 - scaleVal) * 0.24;
+        obj.scale.set(scaleVal, scaleVal, scaleVal);
         if (1.0 - scaleVal > 0.005) {
           requestAnimationFrame(springBounce);
         } else {
-          planeEl.setAttribute('scale', '1 1 1');
+          obj.scale.set(1, 1, 1);
         }
       };
       springBounce();
     }
   };
 
-  // 3D Plane Mesh가 생성 완료되었으면 즉시 드로잉, 아니면 로드 완료 후 드로잉
   if (planeEl.getObject3D('mesh')) {
     draw();
   } else {
@@ -1956,18 +1988,18 @@ async function bootstrapApp(mode) {
                   position="0 -0.4 -6" scale="0.35 0.35 0.35" rotation="0 0 0" drag-rotate>
           
           <!-- 1. 걷기 모션 호랑이 -->
-          <a-entity id="char-walk" visible="false" gltf-model="#modelWalk" rotation="0 180 0" animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+          <a-entity id="char-walk" visible="false" gltf-model="#modelWalk" rotation="0 90 0" animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat; timeScale: 1;"></a-entity>
           <!-- 2. 인사 모션 호랑이 -->
-          <a-entity id="char-hello" visible="false" gltf-model="#modelHello" rotation="0 180 0" animation-mixer="clip: Armature|Big_Wave_Hello|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+          <a-entity id="char-hello" visible="false" gltf-model="#modelHello" rotation="0 90 0" animation-mixer="clip: Armature|Big_Wave_Hello|baselayer; loop: repeat; timeScale: 1;"></a-entity>
           <!-- 3. 설명 모션 호랑이 -->
-          <a-entity id="char-call" visible="false" gltf-model="#modelCall" rotation="0 180 0" animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+          <a-entity id="char-call" visible="false" gltf-model="#modelCall" rotation="0 90 0" animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat; timeScale: 1;"></a-entity>
         </a-entity>
         
         <!-- 가마 불빛 (평소에는 꺼져있고 퀴즈 게임 시 호선생 발밑에서 빨간 라이트로 빛남) -->
         <a-light id="kiln-fire-light" type="point" color="#ff4400" intensity="0" distance="3.0" position="0 -0.4 -1.5"></a-light>
         
         <!-- 월드 루트 밖의 독립된 말풍선 (스케일 왜곡 방지 및 클릭 레이캐스팅 보장) -->
-        <a-plane id="speech-bubble" position="0 0.38 -1.5" width="0.82" height="0.21" 
+        <a-plane id="speech-bubble" position="0 0.52 -1.5" width="0.9" height="0.45" 
                  class="clickable"
                  material="shader: flat; transparent: true; side: double; depthTest: false;" 
                  billboard visible="true"></a-plane>

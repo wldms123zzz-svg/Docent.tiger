@@ -115,7 +115,10 @@ export class TrackingController extends EventTarget {
   // 4. 마커 감지 핸들러 — 외부 트래커에서 호출
   // ──────────────────────────────────────────────
   onMarkerFound(markerId, transformMatrix) {
-    // 다중 마커 시 첫 인식 마커만 채택
+    if (this._lostTimer) {
+      clearTimeout(this._lostTimer);
+      this._lostTimer = null;
+    }
     if (this.state !== STATES.NAVIGATION && this.state !== STATES.BOOT) return;
     this.dispatchEvent(new CustomEvent('marker-found', {
       detail: { markerId, transformMatrix },
@@ -125,9 +128,14 @@ export class TrackingController extends EventTarget {
 
   onMarkerLost(markerId) {
     if (this.state !== STATES.EXPLANATION) return;
-    this.dispatchEvent(new CustomEvent('marker-lost', { detail: { markerId } }));
-    // 마커 손실 시 즉시 NAVIGATION 복귀 (UX 정책상 변경 가능)
-    this.enter(STATES.NAVIGATION);
+    if (this._lostTimer) return;
+    
+    // 모바일 흔들림 방지: 2.5초 동안 마커 재인식이 안 될 때만 복귀
+    this._lostTimer = setTimeout(() => {
+      this.dispatchEvent(new CustomEvent('marker-lost', { detail: { markerId } }));
+      this.enter(STATES.NAVIGATION);
+      this._lostTimer = null;
+    }, 2500);
   }
 
   // ──────────────────────────────────────────────
