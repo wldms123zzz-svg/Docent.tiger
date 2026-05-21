@@ -1912,62 +1912,69 @@ async function bootstrapApp(mode) {
 
   let sceneHTML = '';
   if (mode === 'mindar') {
-    // MindAR: <a-scene mindar-image="imageTargetSrc:..."> 형태
     sceneHTML = `
       <a-scene
         mindar-image="imageTargetSrc: ${MARKERS.mindar}; autoStart: false; uiLoading: no; uiError: no; uiScanning: no;"
         embedded color-space="sRGB"
         renderer="colorManagement: true; physicallyCorrectLights: true; antialias: false; alpha: true; precision: mediump;"
-        vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+        vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false"
+        cursor="rayOrigin: mouse" raycaster="objects: #speech-bubble">
 
         <a-assets>
           <a-asset-item id="modelWalk"  src="${MODEL.walk}"></a-asset-item>
+          <a-asset-item id="modelHello" src="${MODEL.hello}"></a-asset-item>
           <a-asset-item id="modelCall"  src="${MODEL.call}"></a-asset-item>
         </a-assets>
 
-        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        <a-camera position="0 0 0" look-controls="enabled: false">
+          <a-entity id="char-world" visible="false"
+                    position="-0.38 -0.42 -1.2" scale="0.14 0.14 0.14" rotation="0 40 0">
+            <a-entity id="char-walk" visible="false" gltf-model="#modelWalk" rotation="0 90 0" animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+            <a-entity id="char-hello" visible="false" gltf-model="#modelHello" rotation="0 90 0" animation-mixer="clip: Armature|Big_Wave_Hello|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+            <a-entity id="char-call" visible="false" gltf-model="#modelCall" rotation="0 90 0" animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+          </a-entity>
+          
+          <a-plane id="speech-bubble" position="-0.08 -0.12 -1.2" width="0.75" height="0.38" 
+                   class="clickable"
+                   material="shader: flat; transparent: true; side: double; depthTest: false;" 
+                   visible="true"></a-plane>
+        </a-camera>
 
-        <!-- 마커 0번 앵커: 청자 작품 마커 -->
-        <a-entity id="marker-anchor" mindar-image-target="targetIndex: 0">
-          <a-entity id="char-marker" scale="0.5 0.5 0.5" rotation="0 180 0" position="0 0 0.1"
-                    gltf-model="#modelCall" drag-rotate
-                    animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat"></a-entity>
-        </a-entity>
-
-        <!-- 월드 캐릭터: NAVIGATION 모드에서만 visible -->
-        <a-entity id="char-world" visible="false"
-                  position="0 -0.4 -1.5" scale="0.35 0.35 0.35" rotation="0 0 0" drag-rotate
-                  gltf-model="#modelWalk"
-                  animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat"></a-entity>
+        <!-- 마커 앵커 (감지 이벤트 연동) -->
+        <a-entity id="marker-anchor" mindar-image-target="targetIndex: 0"></a-entity>
       </a-scene>`;
   } else if (mode === 'arjs') {
     sceneHTML = `
       <a-scene
         embedded arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix;"
         renderer="colorManagement: true; physicallyCorrectLights: true; antialias: false; alpha: true; precision: mediump;"
-        vr-mode-ui="enabled: false">
+        vr-mode-ui="enabled: false"
+        cursor="rayOrigin: mouse" raycaster="objects: #speech-bubble">
 
         <a-assets>
           <a-asset-item id="modelWalk" src="${MODEL.walk}"></a-asset-item>
+          <a-asset-item id="modelHello" src="${MODEL.hello}"></a-asset-item>
           <a-asset-item id="modelCall" src="${MODEL.call}"></a-asset-item>
         </a-assets>
 
-        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        <a-camera position="0 0 0" look-controls="enabled: false">
+          <a-entity id="char-world" visible="false"
+                    position="-0.38 -0.42 -1.2" scale="0.14 0.14 0.14" rotation="0 40 0">
+            <a-entity id="char-walk" visible="false" gltf-model="#modelWalk" rotation="0 90 0" animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+            <a-entity id="char-hello" visible="false" gltf-model="#modelHello" rotation="0 90 0" animation-mixer="clip: Armature|Big_Wave_Hello|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+            <a-entity id="char-call" visible="false" gltf-model="#modelCall" rotation="0 90 0" animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+          </a-entity>
+          
+          <a-plane id="speech-bubble" position="-0.08 -0.12 -1.2" width="0.75" height="0.38" 
+                   class="clickable"
+                   material="shader: flat; transparent: true; side: double; depthTest: false;" 
+                   visible="true"></a-plane>
+        </a-camera>
 
         <a-nft id="marker-anchor" type="nft" url="${MARKERS.arjs}"
-               smooth="true" smoothCount="10" smoothTolerance="0.01" smoothThreshold="5">
-          <a-entity id="char-marker" scale="80 80 80" rotation="-90 0 0" position="100 0 0"
-                    gltf-model="#modelCall"
-                    animation-mixer="clip: *; loop: repeat"></a-entity>
-        </a-nft>
-
-        <a-entity id="char-world" visible="false"
-                  position="0 -0.4 -1.5" scale="0.35 0.35 0.35"
-                  gltf-model="#modelWalk"
-                  animation-mixer="clip: *; loop: repeat"></a-entity>
+               smooth="true" smoothCount="10" smoothTolerance="0.01" smoothThreshold="5"></a-nft>
       </a-scene>`;
   } else {
-    // nav-only — 마커 라이브러리 미사용, getUserMedia 단독 + A-Frame 기본
     sceneHTML = `
       <video id="bg-video" autoplay playsinline muted
              style="position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:-1;"></video>
@@ -1982,27 +1989,22 @@ async function bootstrapApp(mode) {
           <a-asset-item id="modelCall" src="${MODEL.call}"></a-asset-item>
         </a-assets>
 
-        <a-camera position="0 0 0" look-controls="enabled: true; magicWindowTrackingEnabled: true; touchEnabled: false; mouseEnabled: false"></a-camera>
-
-        <a-entity id="char-world" visible="false"
-                  position="0 -0.4 -6" scale="0.35 0.35 0.35" rotation="0 0 0" drag-rotate>
+        <a-camera position="0 0 0" look-controls="enabled: true; magicWindowTrackingEnabled: true; touchEnabled: false; mouseEnabled: false">
+          <a-entity id="char-world" visible="false"
+                    position="-0.38 -0.42 -1.2" scale="0.14 0.14 0.14" rotation="0 40 0">
+            <a-entity id="char-walk" visible="false" gltf-model="#modelWalk" rotation="0 90 0" animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+            <a-entity id="char-hello" visible="false" gltf-model="#modelHello" rotation="0 90 0" animation-mixer="clip: Armature|Big_Wave_Hello|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+            <a-entity id="char-call" visible="false" gltf-model="#modelCall" rotation="0 90 0" animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+          </a-entity>
           
-          <!-- 1. 걷기 모션 호랑이 -->
-          <a-entity id="char-walk" visible="false" gltf-model="#modelWalk" rotation="0 90 0" animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat; timeScale: 1;"></a-entity>
-          <!-- 2. 인사 모션 호랑이 -->
-          <a-entity id="char-hello" visible="false" gltf-model="#modelHello" rotation="0 90 0" animation-mixer="clip: Armature|Big_Wave_Hello|baselayer; loop: repeat; timeScale: 1;"></a-entity>
-          <!-- 3. 설명 모션 호랑이 -->
-          <a-entity id="char-call" visible="false" gltf-model="#modelCall" rotation="0 90 0" animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat; timeScale: 1;"></a-entity>
-        </a-entity>
-        
+          <a-plane id="speech-bubble" position="-0.08 -0.12 -1.2" width="0.75" height="0.38" 
+                   class="clickable"
+                   material="shader: flat; transparent: true; side: double; depthTest: false;" 
+                   visible="true"></a-plane>
+        </a-camera>
+
         <!-- 가마 불빛 (평소에는 꺼져있고 퀴즈 게임 시 호선생 발밑에서 빨간 라이트로 빛남) -->
         <a-light id="kiln-fire-light" type="point" color="#ff4400" intensity="0" distance="3.0" position="0 -0.4 -1.5"></a-light>
-        
-        <!-- 월드 루트 밖의 독립된 말풍선 (스케일 왜곡 방지 및 클릭 레이캐스팅 보장) -->
-        <a-plane id="speech-bubble" position="0 0.52 -1.5" width="0.9" height="0.45" 
-                 class="clickable"
-                 material="shader: flat; transparent: true; side: double; depthTest: false;" 
-                 billboard visible="true"></a-plane>
       </a-scene>`;
   }
   stage.innerHTML = sceneHTML;

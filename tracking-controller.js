@@ -142,14 +142,8 @@ export class TrackingController extends EventTarget {
   // 5. 캐릭터 transform 주입 (트래커 → 매 프레임)
   // ──────────────────────────────────────────────
   pushTransform({ position, rotation, scale = 1 }) {
-    if (!this.character) return;
-    const obj = this.character.object3D;
-    if (!obj) return;
-    // 단순 대입 — 떨림 보정은 트래커 단에서 칼만/EMA로 선처리 권장
-    if (position) obj.position.set(position[0], position[1], position[2]);
-    if (rotation) obj.rotation.set(rotation[0], rotation[1], rotation[2]);
-    obj.scale.setScalar(scale);
-    this.lastTransform = { position, rotation, scale };
+    // 캐릭터 화면 좌하단 고정 방식을 적용했으므로, 트래커의 실시간 위치 덮어쓰기를 비활성화하여 안정적 뷰 확보.
+    return;
   }
 
   // ──────────────────────────────────────────────
