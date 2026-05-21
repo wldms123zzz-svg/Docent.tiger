@@ -1061,6 +1061,7 @@ AFRAME.registerComponent('drag-rotate', {
 // 한글 텍스트를 말풍선 모양 Canvas로 그려 3D 텍스처로 반환/주입하는 유틸리티
 function updateSpeechBubble(planeEl, text) {
   if (!planeEl) return;
+  const safeText = text || '';
 
   const draw = () => {
     const canvas = document.createElement('canvas');
@@ -1081,10 +1082,10 @@ function updateSpeechBubble(planeEl, text) {
     ctx.lineTo(x + w, y + h - r);
     ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
     
-    // 말풍선 아래쪽 꼭짓점 (꼬리)
-    ctx.lineTo(256 + 15, y + h);
-    ctx.lineTo(256, y + h + 15);
-    ctx.lineTo(256 - 15, y + h);
+    // 말풍선 아래쪽 꼭짓점 (꼬리를 왼쪽 105px 근처로 이동시켜 호랑이 입 위치와 정합)
+    ctx.lineTo(120 + 15, y + h);
+    ctx.lineTo(105, y + h + 15);
+    ctx.lineTo(90, y + h);
     
     ctx.lineTo(x + r, y + h);
     ctx.quadraticCurveTo(x, y + h, x, y + h - r);
@@ -1093,15 +1094,15 @@ function updateSpeechBubble(planeEl, text) {
     ctx.closePath();
     ctx.fill();
     
-    // 텍스트 스타일링
+    // 텍스트 스타일링 (웹폰트 다운 지연 극복을 위해 시스템 폰트 폴백 설정)
     ctx.fillStyle = '#0a0d12';
-    ctx.font = 'bold 20px "Noto Serif KR", serif';
+    ctx.font = 'bold 20px "Noto Serif KR", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
     // 텍스트 줄바꿈 로직 (말풍선 너비에 맞춰 자동 래핑)
     const maxWidth = 440;
-    const words = text.split('');
+    const words = safeText.split('');
     const lines = [];
     let currentLine = '';
     
@@ -1123,6 +1124,8 @@ function updateSpeechBubble(planeEl, text) {
     }
     lines.push(currentLine);
     
+    console.log(`[SpeechBubble] Text lines to render:`, lines);
+
     // 줄 렌더링
     const lineHeight = 28;
     const startY = (h / 2) - ((lines.length - 1) * lineHeight / 2) + y;
@@ -1928,13 +1931,13 @@ async function bootstrapApp(mode) {
 
         <a-camera position="0 0 0" look-controls="enabled: false">
           <a-entity id="char-world" visible="false"
-                    position="-0.38 -0.42 -1.2" scale="0.14 0.14 0.14" rotation="0 40 0">
+                    position="-0.33 -0.36 -1.1" scale="0.25 0.25 0.25" rotation="0 40 0">
             <a-entity id="char-walk" visible="false" gltf-model="#modelWalk" rotation="0 90 0" animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat; timeScale: 1;"></a-entity>
             <a-entity id="char-hello" visible="false" gltf-model="#modelHello" rotation="0 90 0" animation-mixer="clip: Armature|Big_Wave_Hello|baselayer; loop: repeat; timeScale: 1;"></a-entity>
             <a-entity id="char-call" visible="false" gltf-model="#modelCall" rotation="0 90 0" animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat; timeScale: 1;"></a-entity>
           </a-entity>
           
-          <a-plane id="speech-bubble" position="-0.08 -0.12 -1.2" width="0.75" height="0.38" 
+          <a-plane id="speech-bubble" position="0.14 -0.02 -1.1" width="0.75" height="0.38" 
                    class="clickable"
                    material="shader: flat; transparent: true; side: double; depthTest: false;" 
                    visible="true"></a-plane>
@@ -1959,13 +1962,13 @@ async function bootstrapApp(mode) {
 
         <a-camera position="0 0 0" look-controls="enabled: false">
           <a-entity id="char-world" visible="false"
-                    position="-0.38 -0.42 -1.2" scale="0.14 0.14 0.14" rotation="0 40 0">
+                    position="-0.33 -0.36 -1.1" scale="0.25 0.25 0.25" rotation="0 40 0">
             <a-entity id="char-walk" visible="false" gltf-model="#modelWalk" rotation="0 90 0" animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat; timeScale: 1;"></a-entity>
             <a-entity id="char-hello" visible="false" gltf-model="#modelHello" rotation="0 90 0" animation-mixer="clip: Armature|Big_Wave_Hello|baselayer; loop: repeat; timeScale: 1;"></a-entity>
             <a-entity id="char-call" visible="false" gltf-model="#modelCall" rotation="0 90 0" animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat; timeScale: 1;"></a-entity>
           </a-entity>
           
-          <a-plane id="speech-bubble" position="-0.08 -0.12 -1.2" width="0.75" height="0.38" 
+          <a-plane id="speech-bubble" position="0.14 -0.02 -1.1" width="0.75" height="0.38" 
                    class="clickable"
                    material="shader: flat; transparent: true; side: double; depthTest: false;" 
                    visible="true"></a-plane>
@@ -1991,13 +1994,13 @@ async function bootstrapApp(mode) {
 
         <a-camera position="0 0 0" look-controls="enabled: true; magicWindowTrackingEnabled: true; touchEnabled: false; mouseEnabled: false">
           <a-entity id="char-world" visible="false"
-                    position="-0.38 -0.42 -1.2" scale="0.14 0.14 0.14" rotation="0 40 0">
+                    position="-0.33 -0.36 -1.1" scale="0.25 0.25 0.25" rotation="0 40 0">
             <a-entity id="char-walk" visible="false" gltf-model="#modelWalk" rotation="0 90 0" animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat; timeScale: 1;"></a-entity>
             <a-entity id="char-hello" visible="false" gltf-model="#modelHello" rotation="0 90 0" animation-mixer="clip: Armature|Big_Wave_Hello|baselayer; loop: repeat; timeScale: 1;"></a-entity>
             <a-entity id="char-call" visible="false" gltf-model="#modelCall" rotation="0 90 0" animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat; timeScale: 1;"></a-entity>
           </a-entity>
           
-          <a-plane id="speech-bubble" position="-0.08 -0.12 -1.2" width="0.75" height="0.38" 
+          <a-plane id="speech-bubble" position="0.14 -0.02 -1.1" width="0.75" height="0.38" 
                    class="clickable"
                    material="shader: flat; transparent: true; side: double; depthTest: false;" 
                    visible="true"></a-plane>
