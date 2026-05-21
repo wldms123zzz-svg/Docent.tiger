@@ -453,10 +453,40 @@
     pointer-events: none; width: 100%; height: 100%;
   }
 
-  /* ──────────── 마이크 버튼 (양방향 대화) ──────────── */
-  #mic-btn {
+  /* ──────────── 마이크 버튼 & 하단 인터페이스 전체 레이아웃 ──────────── */
+  .hud-bottom {
+    pointer-events: none;
+    width: 100%;
+    background: linear-gradient(to top, rgba(10, 13, 18, 0.95) 0%, rgba(10, 13, 18, 0.6) 60%, transparent 100%);
+    padding: 40px 16px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin: 0 -16px -16px; /* hud 컨테이너 패딩 마진 무력화 및 밀착 */
+  }
+  .hud-guide-text {
+    font-size: 11px;
+    color: var(--celadon-lt);
+    letter-spacing: 0.15em;
+    font-weight: 500;
+    text-transform: uppercase;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    animation: bounceText 2s infinite ease-in-out;
+  }
+  @keyframes bounceText {
+    0%, 100% { transform: translateY(0); opacity: 0.7; }
+    50% { transform: translateY(-4px); opacity: 1; }
+  }
+  .hud-control-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
     pointer-events: auto;
-    position: fixed; bottom: 32px; right: 24px; z-index: 60;
+  }
+  .mic-btn {
+    pointer-events: auto;
     width: 60px; height: 60px; border-radius: 50%;
     background: linear-gradient(135deg, var(--celadon) 0%, var(--celadon-dk) 100%);
     border: 2px solid var(--celadon-lt);
@@ -465,19 +495,20 @@
     cursor: pointer;
     box-shadow: 0 6px 24px rgba(74,133,118,0.4), 0 0 12px rgba(136,196,177,0.2);
     transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    outline: none;
   }
-  #mic-btn:active { transform: scale(0.9); }
-  #mic-btn.listening {
+  .mic-btn:active { transform: scale(0.9); }
+  .mic-btn.listening {
     background: linear-gradient(135deg, #d9534f 0%, #a83232 100%);
     border-color: #ff6b6b;
-    box-shadow: 0 0 20px rgba(217,83,79,0.6);
-    animation: micPulse 1s ease-in-out infinite;
+    box-shadow: 0 0 20px rgba(217,83,79,0.7);
+    animation: micPulse 1.2s ease-in-out infinite;
   }
   @keyframes micPulse {
-    0%, 100% { box-shadow: 0 0 20px rgba(217,83,79,0.4); }
-    50% { box-shadow: 0 0 30px rgba(217,83,79,0.8); }
+    0%, 100% { box-shadow: 0 0 15px rgba(217,83,79,0.4); }
+    50% { box-shadow: 0 0 25px rgba(217,83,79,0.8); }
   }
-  #mic-btn.hidden { display: none; }
+  .mic-btn.hidden { display: none; }
 </style>
 </head>
 <body>
@@ -528,10 +559,15 @@
     <div class="reticle-label">전시 작품을 사각형 안에 비춰주세요</div>
     <button id="scan-trigger-btn" class="scan-trigger-btn">작품 비추기 (테스트용)</button>
   </div>
-</div>
 
-<!-- 🎙️ 마이크 버튼 (양방향 음성 대화) -->
-<button id="mic-btn" class="hidden" title="호선생에게 질문하기">🎙️</button>
+  <!-- 하단 제어 및 안내 가이드 바 레이아웃 -->
+  <div class="hud-bottom">
+    <div class="hud-guide-text" id="hud-guide-text">화면을 터치하면 다음 이야기로 진행해요</div>
+    <div class="hud-control-wrap">
+      <button id="mic-btn" class="mic-btn hidden" title="호선생에게 질문하기">🎙️</button>
+    </div>
+  </div>
+</div>
 
 <!-- Gemini API 키 설정 모달 -->
 <div class="api-modal" id="api-modal">
@@ -1240,11 +1276,23 @@ function startDocentScenario(scene, charWorld) {
   // 캐릭터의 초기 3D 월드 좌표계 설정을 HUD 고정을 위해 제거하고 가시성만 활성화
   charWorld.setAttribute('visible', true);
   
+  // 호랑이 3D 등장 스프링 바운스 연출 (스케일 0.01에서 0.25까지 퐁 하고 솟구치듯 커짐)
+  const obj = charWorld.object3D;
+  obj.scale.set(0.01, 0.01, 0.01);
+  let scaleVal = 0.01;
+  const bounce = () => {
+    scaleVal += (0.25 - scaleVal) * 0.22;
+    obj.scale.set(scaleVal, scaleVal, scaleVal);
+    if (0.25 - scaleVal > 0.002) {
+      requestAnimationFrame(bounce);
+    } else {
+      obj.scale.set(0.25, 0.25, 0.25);
+    }
+  };
+  bounce();
+  
   const speechBubble = scene.querySelector('#speech-bubble');
   
-  // 첫 진입 대기 안내 (TTS 오토플레이 정책 우회용 가이드)
-  updateSpeechBubble(speechBubble, "반갑구나! 호선생 도슨트와 함께 박물관 여행을 시작하려면 화면을 한 번 탭(터치)해주려무나!");
-
   // ─── FlowController 의존성 주입 (새 아키텍처) ───
   flowCtrl = new FlowController({
     artworkId: 'camera-scan',
@@ -1300,17 +1348,13 @@ function startDocentScenario(scene, charWorld) {
     }
   };
 
-  // 화면 탭으로 다음 단계 진행 및 초기 웜업
+  // 화면 탭으로 다음 단계 진행
   if (!window.__clickListenerRegistered) {
     window.__clickListenerRegistered = true;
     window.addEventListener('click', () => {
       if (!flowCtrl) return;
       
-      // 첫 클릭 시에만 TTS 웜업 수행 및 호선생 FSM 시나리오 시작
       if (flowCtrl.state === 'IDLE') {
-        if (typeof warmupTTS === 'function') {
-          warmupTTS();
-        }
         flowCtrl.start();
       } else {
         if (!flowCtrl._transitioning) {
@@ -1319,6 +1363,9 @@ function startDocentScenario(scene, charWorld) {
       }
     });
   }
+
+  // 웰컴 제스처로부터 오디오 권한을 얻은 상태이므로 지체 없이 즉각 인사말 자동 시작!
+  flowCtrl.start();
 }
 
 function resetGame(scene, charWorld) {
