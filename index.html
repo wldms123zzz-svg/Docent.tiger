@@ -1237,11 +1237,13 @@ let kilnFlickerInterval = null;
 function startDocentScenario(scene, charWorld) {
   if (!charWorld) return;
   
-  // 캐릭터의 초기 3D 월드 좌표계 설정
-  charWorld.object3D.position.set(0, -0.4, -1.5);
+  // 캐릭터의 초기 3D 월드 좌표계 설정을 HUD 고정을 위해 제거하고 가시성만 활성화
   charWorld.setAttribute('visible', true);
   
   const speechBubble = scene.querySelector('#speech-bubble');
+  
+  // 첫 진입 대기 안내 (TTS 오토플레이 정책 우회용 가이드)
+  updateSpeechBubble(speechBubble, "반갑구나! 호선생 도슨트와 함께 박물관 여행을 시작하려면 화면을 한 번 탭(터치)해주려무나!");
 
   // ─── FlowController 의존성 주입 (새 아키텍처) ───
   flowCtrl = new FlowController({
@@ -1298,18 +1300,25 @@ function startDocentScenario(scene, charWorld) {
     }
   };
 
-  // 화면 탭으로 다음 단계 진행
+  // 화면 탭으로 다음 단계 진행 및 초기 웜업
   if (!window.__clickListenerRegistered) {
     window.__clickListenerRegistered = true;
     window.addEventListener('click', () => {
-      if (flowCtrl && !flowCtrl._transitioning) {
-        flowCtrl.next();
+      if (!flowCtrl) return;
+      
+      // 첫 클릭 시에만 TTS 웜업 수행 및 호선생 FSM 시나리오 시작
+      if (flowCtrl.state === 'IDLE') {
+        if (typeof warmupTTS === 'function') {
+          warmupTTS();
+        }
+        flowCtrl.start();
+      } else {
+        if (!flowCtrl._transitioning) {
+          flowCtrl.next();
+        }
       }
     });
   }
-
-  // 흐름 시작
-  flowCtrl.start();
 }
 
 function resetGame(scene, charWorld) {
@@ -1931,10 +1940,10 @@ async function bootstrapApp(mode) {
 
         <a-camera position="0 0 0" look-controls="enabled: false">
           <a-entity id="char-world" visible="false"
-                    position="-0.33 -0.36 -1.1" scale="0.25 0.25 0.25" rotation="0 40 0">
-            <a-entity id="char-walk" visible="false" gltf-model="#modelWalk" rotation="0 90 0" animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat; timeScale: 1;"></a-entity>
-            <a-entity id="char-hello" visible="false" gltf-model="#modelHello" rotation="0 90 0" animation-mixer="clip: Armature|Big_Wave_Hello|baselayer; loop: repeat; timeScale: 1;"></a-entity>
-            <a-entity id="char-call" visible="false" gltf-model="#modelCall" rotation="0 90 0" animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+                    position="-0.33 -0.36 -1.1" scale="0.25 0.25 0.25" rotation="0 0 0">
+            <a-entity id="char-walk" visible="false" gltf-model="#modelWalk" rotation="0 180 0" animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+            <a-entity id="char-hello" visible="false" gltf-model="#modelHello" rotation="0 180 0" animation-mixer="clip: Armature|Big_Wave_Hello|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+            <a-entity id="char-call" visible="false" gltf-model="#modelCall" rotation="0 180 0" animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat; timeScale: 1;"></a-entity>
           </a-entity>
           
           <a-plane id="speech-bubble" position="0.14 -0.02 -1.1" width="0.75" height="0.38" 
@@ -1962,10 +1971,10 @@ async function bootstrapApp(mode) {
 
         <a-camera position="0 0 0" look-controls="enabled: false">
           <a-entity id="char-world" visible="false"
-                    position="-0.33 -0.36 -1.1" scale="0.25 0.25 0.25" rotation="0 40 0">
-            <a-entity id="char-walk" visible="false" gltf-model="#modelWalk" rotation="0 90 0" animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat; timeScale: 1;"></a-entity>
-            <a-entity id="char-hello" visible="false" gltf-model="#modelHello" rotation="0 90 0" animation-mixer="clip: Armature|Big_Wave_Hello|baselayer; loop: repeat; timeScale: 1;"></a-entity>
-            <a-entity id="char-call" visible="false" gltf-model="#modelCall" rotation="0 90 0" animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+                    position="-0.33 -0.36 -1.1" scale="0.25 0.25 0.25" rotation="0 0 0">
+            <a-entity id="char-walk" visible="false" gltf-model="#modelWalk" rotation="0 180 0" animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+            <a-entity id="char-hello" visible="false" gltf-model="#modelHello" rotation="0 180 0" animation-mixer="clip: Armature|Big_Wave_Hello|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+            <a-entity id="char-call" visible="false" gltf-model="#modelCall" rotation="0 180 0" animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat; timeScale: 1;"></a-entity>
           </a-entity>
           
           <a-plane id="speech-bubble" position="0.14 -0.02 -1.1" width="0.75" height="0.38" 
@@ -1994,10 +2003,10 @@ async function bootstrapApp(mode) {
 
         <a-camera position="0 0 0" look-controls="enabled: true; magicWindowTrackingEnabled: true; touchEnabled: false; mouseEnabled: false">
           <a-entity id="char-world" visible="false"
-                    position="-0.33 -0.36 -1.1" scale="0.25 0.25 0.25" rotation="0 40 0">
-            <a-entity id="char-walk" visible="false" gltf-model="#modelWalk" rotation="0 90 0" animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat; timeScale: 1;"></a-entity>
-            <a-entity id="char-hello" visible="false" gltf-model="#modelHello" rotation="0 90 0" animation-mixer="clip: Armature|Big_Wave_Hello|baselayer; loop: repeat; timeScale: 1;"></a-entity>
-            <a-entity id="char-call" visible="false" gltf-model="#modelCall" rotation="0 90 0" animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+                    position="-0.33 -0.36 -1.1" scale="0.25 0.25 0.25" rotation="0 0 0">
+            <a-entity id="char-walk" visible="false" gltf-model="#modelWalk" rotation="0 180 0" animation-mixer="clip: Armature|walking_man|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+            <a-entity id="char-hello" visible="false" gltf-model="#modelHello" rotation="0 180 0" animation-mixer="clip: Armature|Big_Wave_Hello|baselayer; loop: repeat; timeScale: 1;"></a-entity>
+            <a-entity id="char-call" visible="false" gltf-model="#modelCall" rotation="0 180 0" animation-mixer="clip: Armature|Call_Gesture|baselayer; loop: repeat; timeScale: 1;"></a-entity>
           </a-entity>
           
           <a-plane id="speech-bubble" position="0.14 -0.02 -1.1" width="0.75" height="0.38" 
